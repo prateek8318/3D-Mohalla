@@ -41,7 +41,20 @@ function headGeo(s) {
     parts.push(P(box(0.048, 0.011, 0.012), hc, [x * 0.042, 0.168, -0.108], [0, 0, x * -0.12]));
     parts.push(P(sph(0.028, 6, 5), skin, [x * 0.112, 0.12, 0]));
   }
-  parts.push(P(box(0.05, 0.012, 0.01), s.female ? 0xa0303a : 0x6a2a2a, [0, 0.062, -0.112]));
+  for (const x of [-1, 1]) parts.push(P(sph(0.0045, 5, 4), 0xffffff, [x * 0.042 + 0.004, 0.139, -0.125])); // aankh ki chamak ✨
+  if (s.female && !s.kid) {
+    const blush = new THREE.Color(skin).lerp(new THREE.Color(0xff6f8a), 0.3).getHex();
+    for (const x of [-1, 1]) {
+      parts.push(P(box(0.05, 0.008, 0.016), 0x0a0606, [x * 0.043, 0.151, -0.112], [0.25, 0, x * -0.14])); // palkein
+      parts.push(P(box(0.018, 0.005, 0.01), 0x0a0606, [x * 0.069, 0.143, -0.103], [0, x * 0.5, x * 0.45])); // kajal wing
+      parts.push(P(sph(0.024, 7, 5), blush, [x * 0.062, 0.1, -0.098], [0, 0, 0], [1, 0.6, 0.35])); // gaal pe laali
+      parts.push(P(sph(0.013, 6, 5), 0xffc23a, [x * 0.116, 0.078, -0.004])); // jhumka
+      parts.push(P(new THREE.ConeGeometry(0.014, 0.022, 6), 0xffc23a, [x * 0.116, 0.06, -0.004]));
+    }
+    parts.push(P(box(0.046, 0.011, 0.012), 0xb81f3c, [0, 0.067, -0.112])); // upar ka hoth
+    parts.push(P(box(0.04, 0.013, 0.012), 0xc42a48, [0, 0.055, -0.11], [0.15, 0, 0])); // neeche ka hoth
+    parts.push(P(sph(0.008, 6, 4), 0xc0001a, [0, 0.172, -0.113])); // bindi
+  } else parts.push(P(box(0.05, 0.012, 0.01), s.female ? 0xa0303a : 0x6a2a2a, [0, 0.062, -0.112]));
   const st = s.hairStyle;
   const capG = (k = 0.5, sc = [0.97, 1.05, 1.04], y = 0.13) => P(sph(0.128, 14, 9, 0, Math.PI * 2, 0, Math.PI * k), hc, [0, y, 0.005], [0, 0, 0], sc);
   if (st === 'short' || st === 'side') {

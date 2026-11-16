@@ -13,6 +13,7 @@ import { buildPlaces2 } from './places2.js';
 import { buildAnimals } from './animals.js';
 import { buildCouple } from './couple.js';
 import { buildCouples } from './couples.js';
+import { createEyeLock } from './eyelock.js';
 import { buildNPCs } from './npcs.js';
 import { makeHuman, updateHuman, setAction, setOverlay, hold, itemMesh } from './humans.js';
 import { buildTraffic } from './traffic.js';
@@ -892,6 +893,10 @@ function openCaught() {
     ],
   });
 }
+const eyeLock = createEyeLock({
+  camera,
+  onStart: () => { bellSfx(); glide(520, 780, 1.6, 'sine', 0.05, 0.2); flash('love'); },
+});
 const player = { speedKill() { car.speed = 0; walker.speed = 0; } };
 
 // ---------- RETRO ----------
@@ -1656,7 +1661,7 @@ function tick() {
 
   if (started && !state.scene) {
     if (state.mode === 'drive') updateCar(dt);
-    else { car.speed *= 0.9; updateWalker(dt); }
+    else { car.speed *= 0.9; if (!eyeLock.active) updateWalker(dt); }
     collectCoins();
   }
   const active = state.mode === 'drive' ? car : walker;
@@ -1765,7 +1770,11 @@ function tick() {
   if (started) updateObjective(active.pos);
   if (state.scene) updateScene(dt);
   else if (state.cine) updateCine(dt);
-  else if (started) { updateCamera(dt, lv); updateProximity(); updateStatus(); }
+  else if (started) {
+    const eyeOn = eyeLock.update(dt, t, { mode: state.mode, walker, me, girls: npcs.girls(), blocked: !!(state.open || state.seq || weapons?.aiming || state.wanted > 0 || story?.active) });
+    if (!eyeOn) updateCamera(dt, lv);
+    updateProximity(); updateStatus();
+  }
   else {
     const a = t * 0.12;
     camera.position.set(Math.sin(a) * 34, 20 + Math.sin(t * 0.3) * 3, Math.cos(a) * 34 + 10);

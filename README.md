@@ -3,6 +3,8 @@
 Ek desi neon city jo 3D mein hai. Auto-rickshaw chalao, dukaanein kholo aur gaana bajao. Poori city music ki beat pe naachti hai.
 
 ## Features
+- **🧭 Mission guidance**: objective pe ➤ teer + distance pill, saaf HUD (kahan jao, kya karo), minimap peela nishaan
+- **🔍 YouTube search ab in-app**: naya tab nahi khulta; na mile to free ad-free gaane apne aap
 - **Asli time din-raat**: ab game khud phone ke time pe chalta hai (📍 menu se badal sakte ho)
 - **Lambi east-west sadak**: Mandir se Masjid tak poora street, dono taraf buildings
 - **Aur jode (couples)**: park, ghat, chowk, bench pe baithe (saaf-suthra)

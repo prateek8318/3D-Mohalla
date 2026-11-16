@@ -1,13 +1,15 @@
 import * as THREE from 'three';
 import { makeHuman, updateHuman, setAction } from './humans.js';
+import { DRIVE, addBox } from './collide.js';
 
 // Mohalle mein aur bhi jode — benches/ghat/park pe baithe (saaf-suthra romance)
 const SPOTS = [
   { x: -128, z: 134, h: 0 },        // Gandhi Park
   { x: -140, z: 150, h: Math.PI / 2 },
-  { x: 6, z: 11, h: Math.PI },      // Chowk kinaare
-  { x: -8, z: 60, h: Math.PI / 2 }, // main road bench
-  { x: 9, z: 95, h: -Math.PI / 2 },
+  // footpath pe — sadak (|x| < 8.4, cross road |z| < 8.4) se bahar
+  { x: 14, z: 9.7, h: Math.PI },        // Chowk kinaare (cross road ka footpath)
+  { x: -9.7, z: 60, h: Math.PI / 2 },   // main road ka footpath
+  { x: 9.7, z: 95, h: -Math.PI / 2 },
   { x: -14, z: -108, h: 0 },        // Prem Ghat seedhi
   { x: 14, z: -108, h: 0 },
   { x: -40, z: 198, h: Math.PI / 2 }, // Bazaar gali
@@ -18,6 +20,13 @@ const M = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.75 });
 export function buildCouples(scene) {
   const couples = [];
   for (const s of SPOTS) {
+    // safety: bench ka koi bhi kona gaadi wali sadak pe pade to skip — dobara beech sadak bench nahi
+    const onRoad = [[-1, -0.3], [1, -0.3], [-1, 0.6], [1, 0.6]].some(([a, b]) => {
+      const x = s.x + Math.cos(s.h) * a + Math.sin(s.h) * b, z = s.z - Math.sin(s.h) * a + Math.cos(s.h) * b;
+      return DRIVE.some((r) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1);
+    });
+    if (onRoad) { console.warn('bench sadak pe tha, skip:', s); continue; }
+    addBox(s.x, s.z, Math.abs(Math.cos(s.h)) * 1.9 + Math.abs(Math.sin(s.h)) * 0.6, Math.abs(Math.sin(s.h)) * 1.9 + Math.abs(Math.cos(s.h)) * 0.6, true);
     const bench = new THREE.Group();
     bench.position.set(s.x, 0, s.z);
     bench.rotation.y = s.h;

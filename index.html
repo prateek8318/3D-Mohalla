@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Mohalla 3D — Desi Neon City</title>
+  <meta name="description" content="Desi 3D neon city: auto-rickshaw chalao, mithai-barber-paan ki dukaan kholo, gaana bajao aur city ko beat pe nachao." />
+  <meta name="theme-color" content="#120822" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛺</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=VT323&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="ui3d"></div>
+  <div id="mission" class="mission hidden"></div>
+  <div id="story" class="mission story hidden"></div>
+  <div id="objArrow" class="objarrow hidden">➤</div>
+  <div id="objPill" class="objpill hidden"></div>
+  <div id="passed" class="passed hidden"></div>
+  <div id="cross" class="cross hidden"></div>
+  <div id="scope" class="scope hidden"><div></div></div>
+  <div id="hp" class="hp"><div id="hpFill"></div></div>
+  <div id="flash"></div>
+
+  <!-- INTRO -->
+  <div id="intro" class="intro">
+    <div class="intro-card">
+      <div class="logo">मोहल्ला<span>3D</span></div>
+      <p class="tag">90s ka mohalla • Subah se raat tak • Mandir, masjid, chaat, STD booth aur ghat pe filmy romance 🌙</p>
+      <div class="lang-pick">
+        <button data-lang="hi" class="on">हिंदी</button>
+        <button data-lang="bho">भोजपुरी</button>
+      </div>
+      <label class="bak"><input type="checkbox" id="bakIntro" /> 🤬 Bakchodi mode <small>(🤬 button dobara dabao = 18+ gaali mode)</small></label>
+      <button id="startBtn" class="big" disabled>Mohalla bann raha hai…</button>
+      <div class="keys">
+        <span><b>WASD</b> chalo/chalao</span><span><b>Shift</b> daudo</span><span><b>Space</b> kood</span><span><b>J</b> maaro</span><span><b>F</b> rickshaw utro/baitho</span><span><b>E</b> baat/dukaan</span><span><b>B</b> jhola</span><span><b>K</b> kaam</span><span><b>1/2/3</b> bandook</span><span><b>Right-click / R</b> nishana</span><span><b>H</b> horn</span><span><b>M</b> music</span><span><b>Mouse drag</b> camera</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <header class="hud">
+    <div class="brand">मोहल्ला<b>3D</b></div>
+    <div class="wallet">💰 ₹<span id="money">200</span></div>
+    <div class="hud-btns">
+      <button id="btnJobs" title="Kaam (K)">💼</button>
+      <button id="btnBag" title="Jhola">🎒</button>
+      <button id="btnRetro" title="Cinematic look" class="on">🎬</button>
+      <button id="btnPlaces" title="Jagah">📍</button>
+      <button id="btnMusic" title="Music">🎵</button>
+      <button id="btnLang" title="Bhasha">हिं</button>
+      <button id="btnBak" title="Bakchodi mode">🤬</button>
+    </div>
+  </header>
+  <div id="status" class="status"></div>
+  <div id="minimap" class="minimap" title="Naksha (tap = bada)"></div>
+  <div id="wanted" class="wanted"></div>
+  <button id="clock" class="clock" title="Agla pahar">🌇 4:00 PM</button>
+  <div id="vhs" class="vhs">▶ PLAY <span>SP</span><br /><small>16 NOV 1994</small></div>
+  <div id="cine" class="cine hidden">
+    <div class="bar top"></div>
+    <div class="bar bot"><div id="cineSub"></div></div>
+    <button id="cineSkip">Skip ⏭</button>
+  </div>
+  <div id="prompt" class="prompt hidden"></div>
+  <div id="toast" class="toast"></div>
+
+  <!-- MOBILE CONTROLS -->
+  <div id="joy" class="joy"><div id="joyKnob"></div></div>
+  <div class="mob-btns">
+    <button id="mAct" class="hidden">🛎️</button>
+    <button id="mF">🚶</button>
+    <button id="mHit">👊</button>
+    <button id="mJump">⤴️</button>
+    <button id="mRun">🏃</button>
+    <button id="mBag">🎒</button>
+    <button id="mAim">🎯</button>
+    <button id="mGun">🔫</button>
+    <button id="mHorn">📯</button>
+  </div>
+
+  <!-- SHOP SHEET -->
+  <div id="shop" class="sheet hidden">
+    <div class="sheet-card">
+      <button class="x" data-close="shop">✕</button>
+      <div class="shop-head">
+        <div id="shopAvatar" class="avatar"></div>
+        <div>
+          <h2 id="shopName"></h2>
+          <div id="shopOwner" class="owner"></div>
+        </div>
+      </div>
+      <div id="shopSay" class="say"></div>
+      <div id="shopItems" class="items"></div>
+    </div>
+  </div>
+
+  <!-- MUSIC SHEET -->
+  <div id="music" class="sheet hidden">
+    <div class="sheet-card">
+      <button class="x" data-close="music">✕</button>
+      <h2>🎧 Mohalla FM</h2>
+      <div class="tabs">
+        <button data-tab="search" class="on">🔍 Search <small>Free</small></button>
+        <button data-tab="mp3">MP3</button>
+        <button data-tab="yt">YouTube</button>
+        <button data-tab="sp">Spotify</button>
+        <button data-tab="mic">Mic</button>
+      </div>
+
+      <div class="pane" data-pane="search">
+        <div class="row"><input id="sq" placeholder="Gaana / singer dhoondo… jaise: Bhojpuri DJ" /><button id="sgo">🔍</button></div>
+        <div class="chips">
+          <button data-q="bhojpuri dj">🔊 Bhojpuri DJ</button><button data-q="bollywood remix">🪩 Bollywood</button><button data-q="hindi romantic">💞 Romantic</button><button data-q="punjabi">🥁 Punjabi</button><button data-q="hindi lofi">🌙 Lofi</button><button data-q="90s bollywood">📼 90s</button>
+        </div>
+        <div class="srcs"><button data-src="audius" class="on">🎧 Free • ad-free</button><button data-src="yt">▶ YouTube</button></div>
+        <div id="sres" class="results"></div>
+        <p class="note" id="snote">🎧 Free: poore gaane, bina ads ke, aur city asli beat pe naachti hai.</p>
+      </div>
+
+      <div class="pane hidden" data-pane="mp3">
+        <label class="file">📁 Apne gaane chuno (MP3/M4A)<input type="file" id="mp3In" accept="audio/*" multiple hidden /></label>
+        <div id="queue" class="queue"></div>
+        <div class="ctrls">
+          <button id="mPrev">⏮</button><button id="mPlay">⏯</button><button id="mNext">⏭</button>
+        </div>
+        <p class="note">✅ 100% ad-free. Gaana tumhare device se bajta hai aur city <b>asli beat</b> pe naachti hai.</p>
+      </div>
+
+      <div class="pane hidden" data-pane="yt">
+        <div class="row"><input id="ytUrl" placeholder="YouTube video / playlist link paste karo" /><button id="ytPlay">▶ Bajao</button></div>
+        <div class="row"><input id="ytSearch" placeholder="Gaana dhoondo…" /><button id="ytFind">🔍</button></div>
+        <p class="note">YouTube ka official player hai, isliye ads YouTube ke haath mein hain (Premium login = no ads). Visuals ke liye neeche Tap-tempo ya Mic tab use karo.</p>
+      </div>
+
+      <div class="pane hidden" data-pane="sp">
+        <div class="row"><input id="spUrl" placeholder="Spotify track / playlist / album link" /><button id="spPlay">▶ Bajao</button></div>
+        <p class="note">Spotify Premium mein login ho to poora gaana, bina ads. Free account pe 30 sec preview milta hai.</p>
+      </div>
+
+      <div class="pane hidden" data-pane="mic">
+        <button id="micBtn" class="wide">🎤 Mic chalu karo</button>
+        <p class="note">Trick: YouTube/Spotify speaker pe bajao, mic sunega aur poori city asli beat pe naachegi.</p>
+      </div>
+
+      <div class="beat">
+        <span>Visual beat:</span>
+        <button id="tapBtn">👆 Tap tempo</button>
+        <b><span id="bpm">110</span> BPM</b>
+      </div>
+    </div>
+  </div>
+
+  <!-- PLACES SHEET -->
+  <div id="places" class="sheet hidden">
+    <div class="sheet-card">
+      <button class="x" data-close="places">✕</button>
+      <h2>📍 Kahan chalein?</h2>
+      <div id="placeList" class="items"></div>
+    </div>
+  </div>
+
+  <!-- PLAYER DOCK -->
+  <div id="dock" class="dock hidden">
+    <div class="dock-bar">
+      <span id="dockTitle">Now playing</span>
+      <button id="dPrev" class="fctl">⏮</button><button id="dPlay" class="fctl">⏯</button><button id="dNext" class="fctl">⏭</button>
+      <button id="dockMin">–</button><button id="dockClose">✕</button>
+    </div>
+    <div id="dockFrame"></div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

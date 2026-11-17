@@ -770,14 +770,29 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
     if (R() < 0.5) n.angryPending = false;
     return n;
   }
+  // BUG FIX: pehle poore naksha pe random jagah dhoondhta tha — bade shehar mein paas ki jagah milti hi nahi thi
+  // (isliye sawari sirf shuru mein milti thi). Ab har footpath pe player ke paas wale hisse se chunta hai.
   function randomSidewalk(pos, minD = 50, maxD = 200) {
-    for (let k = 0; k < 40; k++) {
-      const l = pickLane(), f = R();
-      const x = l.a[0] + (l.b[0] - l.a[0]) * f, z = l.a[1] + (l.b[1] - l.a[1]) * f;
-      const d = Math.hypot(x - pos.x, z - pos.z);
-      if (d >= minD && d <= maxD) return { x, z };
+    const cands = [];
+    for (const l of LANES) {
+      const ax = l.b[0] - l.a[0], az = l.b[1] - l.a[1], len = Math.hypot(ax, az);
+      if (len < 1) continue;
+      for (let k = 0; k < 6; k++) {
+        const f = R();
+        const x = l.a[0] + ax * f, z = l.a[1] + az * f;
+        const d = Math.hypot(x - pos.x, z - pos.z);
+        if (d >= minD && d <= maxD) cands.push({ x, z });
+      }
+      // lane ke sabse paas wale point ke aas-paas bhi
+      const f0 = Math.max(0, Math.min(1, ((pos.x - l.a[0]) * ax + (pos.z - l.a[1]) * az) / (len * len)));
+      for (let k = 0; k < 6; k++) {
+        const f = Math.max(0, Math.min(1, f0 + ((R() - 0.5) * 2 * maxD) / len));
+        const x = l.a[0] + ax * f, z = l.a[1] + az * f;
+        const d = Math.hypot(x - pos.x, z - pos.z);
+        if (d >= minD && d <= maxD) cands.push({ x, z });
+      }
     }
-    return null;
+    return cands.length ? pick(cands) : null;
   }
   function spawnThief(x, z) {
     const h = makeHuman({ outfit: 'tshirt', top: 0x222222, bottom: 0x3a3a3a, hat: 'cap', capColor: 0x111111, shades: true });

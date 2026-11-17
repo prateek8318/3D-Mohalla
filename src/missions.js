@@ -93,7 +93,7 @@ export function createMissions(ctx) {
   const camF = new THREE.Vector3();
   function updateArrow() {
     const p = ctx.getP();
-    if (!m || !beacon.visible || ctx.busy() || !ctx.camera) { arrow.classList.add('hidden'); return; }
+    if (!m || !beacon.visible || ctx.uiBusy() || !ctx.camera) { arrow.classList.add('hidden'); return; }
     arrow.classList.remove('hidden');
     ctx.camera.getWorldDirection(camF);
     const fl = Math.hypot(camF.x, camF.z) || 1, fx = camF.x / fl, fz = camF.z / fl;
@@ -290,17 +290,20 @@ export function createMissions(ctx) {
     if (!m) {
       setHud(null);
       arrow.classList.add('hidden');
-      if (ctx.busy()) return;
-      nextEvent -= dt; nextBaraat -= dt;
-      if (nextEvent <= 0) { nextEvent = 150 + R() * 90; startChor(); }
-      if (nextBaraat <= 0 && !baraat) { nextBaraat = 260 + R() * 160; startBaraat(); }
+      if (ctx.uiBusy()) return;
+      // BUG FIX: story mission chal raha ho tab bhi sadak pe sawari haath de (story khud "3 sawari" maangta hai!)
+      if (!ctx.busy()) {
+        nextEvent -= dt; nextBaraat -= dt;
+        if (nextEvent <= 0) { nextEvent = 150 + R() * 90; startChor(); }
+        if (nextBaraat <= 0 && !baraat) { nextBaraat = 260 + R() * 160; startBaraat(); }
+      }
       // sadak kinare log haath dete hain 🙋 — khud se kaam milta rahe
       if (!m && p.mode === 'drive') {
         hailT -= dt;
         if (hailT <= 0) {
-          hailT = 16 + R() * 14;
+          hailT = 10 + R() * 10;
           const r = R(), lv = level();
-          startSawari(lv >= 2 && r < 0.15 ? 'vip' : r < 0.35 ? 'rush' : 'normal', true);
+          if (!startSawari(lv >= 2 && r < 0.15 ? 'vip' : r < 0.35 ? 'rush' : 'normal', true)) hailT = 3;
         }
       }
       return;

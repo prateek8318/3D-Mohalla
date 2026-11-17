@@ -4,7 +4,7 @@ import { HOTEL_AREA } from './hotel.js';
 const W0 = -450, W1 = 450, Z0 = -135, Z1 = 665, PX = 1.6; // px per meter (ring road tak)
 
 /** GTA jaisa chhota naksha */
-export function buildMinimap(el, { triggers, zones = {}, extraIcons = [] }) {
+export function buildMinimap(el, { triggers, zones = {}, extraIcons = [], onPick = null }) {
   const bg = document.createElement('canvas');
   bg.width = (W1 - W0) * PX; bg.height = (Z1 - Z0) * PX;
   const g = bg.getContext('2d');
@@ -25,16 +25,38 @@ export function buildMinimap(el, { triggers, zones = {}, extraIcons = [] }) {
   const cv = document.createElement('canvas');
   el.appendChild(cv);
   const ctx = cv.getContext('2d');
-  let big = false;
-  el.addEventListener('click', () => { big = !big; el.classList.toggle('big', big); });
+  let big = false, view = null;
+  // bada naksha: upar title + band button, peeche andhera parda
+  const head = document.createElement('div');
+  head.className = 'mm-head';
+  head.innerHTML = '<div><b>🗺️ Naksha</b><small>Kahin bhi tap karo — wahin pahunch jaoge</small></div><button class="mm-x" aria-label="Band karo">✕</button>';
+  el.appendChild(head);
+  const shade = document.createElement('div');
+  shade.className = 'mm-shade hidden';
+  document.body.appendChild(shade);
+  const setBig = (v) => { big = v; el.classList.toggle('big', big); shade.classList.toggle('hidden', !big); };
+  head.querySelector('.mm-x').addEventListener('click', (e) => { e.stopPropagation(); setBig(false); });
+  shade.addEventListener('click', () => setBig(false));
+  el.addEventListener('click', (e) => {
+    if (!big) { setBig(true); return; }
+    if (!view || !onPick || head.contains(e.target)) return;
+    const r = cv.getBoundingClientRect();
+    const x = view.cxw + (e.clientX - r.left - view.w / 2) / view.s;
+    const z = view.czw + (e.clientY - r.top - view.h / 2) / view.s;
+    setBig(false);
+    onPick(x, z);
+  });
+  const ZONE_NAMES = [['🌾 Rampur Gaon', -300, 170], ['🏙️ Cyber City', 300, 170], ['🕌 Purana Shehar', 0, 560], ['🏘️ Mohalla', 0, 90], ['🌊 Ganga Ghat', 0, -128]];
   const icons = triggers.filter((t) => t.def.avatar).map((t) => ({ x: t.x, z: t.z, a: t.def.avatar, c: t.def.color || '#fff', big: ['mandir', 'masjid', 'ghat', 'hotel'].includes(t.def.id) }));
   icons.push(...extraIcons, { x: 0, z: 456, a: '🚂', big: true }, { x: 75, z: 100, a: '🏨', big: true }, { x: 130, z: 140, a: '🚓', big: true }, { x: -135, z: 141, a: '🏏', big: true }, { x: -50, z: 200, a: '🛍️', big: true });
 
   const toS = (x, z, cxw, czw, s, w, h) => [w / 2 + (x - cxw) * s, h / 2 + (z - czw) * s];
-  return function draw(p, heading, extra) {
+  const draw = function draw(p, heading, extra) {
     const w = el.clientWidth, h = el.clientHeight;
     const dpr = Math.min(2, devicePixelRatio);
-    if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+    // BUG FIX: 125% scaling pe w*dpr dashmlav hota tha → har frame canvas reset → naksha jhilmilata tha
+    const cw = Math.round(w * dpr), chh = Math.round(h * dpr);
+    if (cv.width !== cw || cv.height !== chh) { cv.width = cw; cv.height = chh; }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // flicker-proof: pehle solid background, phir map (bina clearRect ke)
     ctx.fillStyle = '#120c1c';
@@ -53,6 +75,11 @@ export function buildMinimap(el, { triggers, zones = {}, extraIcons = [] }) {
     if (sy + sh > bg.height) { const over = sy + sh - bg.height; dh -= over / sh * h; sh -= over; }
     if (sw > 0 && sh > 0) ctx.drawImage(bg, sx, sy, sw, sh, dx, dy, dw, dh);
     const S = (x, z) => toS(x, z, cxw, czw, s, w, h);
+    view = { s, cxw, czw, w, h };
+    if (big) {
+      ctx.font = '700 13px "Baloo 2", sans-serif'; ctx.textAlign = 'center';
+      for (const [t, x, z] of ZONE_NAMES) { const [px, py] = S(x, z); ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillText(t, px + 1, py + 1); ctx.fillStyle = '#fff4e6'; ctx.fillText(t, px, py); }
+    }
     ctx.font = `${big ? 16 : 12}px sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (const ic of icons) {
@@ -80,4 +107,8 @@ export function buildMinimap(el, { triggers, zones = {}, extraIcons = [] }) {
     ctx.fill(); ctx.stroke();
     ctx.restore();
   };
+  draw.open = () => setBig(true);
+  draw.close = () => setBig(false);
+  draw.isBig = () => big;
+  return draw;
 }

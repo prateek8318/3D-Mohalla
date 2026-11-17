@@ -202,7 +202,7 @@ let camYaw = 0, footYaw = 0, camDist = isTouch ? 12 : 11, footDist = isTouch ? 5
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
   keys[e.code] = true;
-  if (e.code === 'Escape') { if (state.scene) endScene(); else if (state.cine) endCine(); else closeSheets(); }
+  if (e.code === 'Escape') { if (drawMap?.isBig()) drawMap.close(); else if (state.scene) endScene(); else if (state.cine) endCine(); else closeSheets(); }
   if (!started) return;
   if (e.repeat) return;
   if (e.code === 'KeyE' && !state.open) interact();
@@ -337,18 +337,30 @@ function dialog({ kind, avatar, title, sub, line, options }) {
   renderOptions(options);
   $('shop').classList.remove('hidden');
 }
+// label ke shuru ka emoji alag icon-tile mein — saaf, professional list
+const EMO = /^((?:\p{Extended_Pictographic}|\p{Regional_Indicator}{2}|[#*0-9]️?⃣)(?:️|\p{Emoji_Modifier}|‍\p{Extended_Pictographic}️?)*)\s*/u;
+function splitIcon(label) { const m = String(label).match(EMO); return m ? [m[1], String(label).slice(m[0].length)] : ['', String(label)]; }
+function optRow({ n, d, p, cls, on, right, icon }) {
+  const b = document.createElement('button');
+  b.className = 'opt' + (cls ? ' ' + cls : '');
+  const [ic, name] = icon ? [icon, n] : splitIcon(n);
+  b.innerHTML = '<span class="ic"></span><span class="tx"><span class="n"></span><span class="d"></span></span><span class="rt"></span>';
+  b.querySelector('.ic').textContent = ic || '•';
+  b.querySelector('.n').textContent = name;
+  const dd = b.querySelector('.d');
+  if (d) dd.textContent = d; else dd.remove();
+  const rt = b.querySelector('.rt');
+  if (p !== undefined) { rt.textContent = p ? '₹' + p : UI[L()].free; rt.classList.add('price'); if (p && p > state.money) rt.classList.add('cant'); }
+  else if (right) rt.textContent = right;
+  else rt.textContent = '›';
+  b.onclick = on;
+  return b;
+}
 function renderOptions(options) {
   const box = $('shopItems');
   box.innerHTML = '';
-  for (const o of options) {
-    const b = document.createElement('button');
-    b.className = 'item' + (o.cls ? ' ' + o.cls : '');
-    b.innerHTML = `<span class="n"></span>${o.p !== undefined ? `<span class="p">${o.p ? '₹' + o.p : UI[L()].free}</span>` : ''}${o.d ? '<span class="d"></span>' : ''}`;
-    b.querySelector('.n').textContent = o.n;
-    if (o.d) b.querySelector('.d').textContent = o.d;
-    b.onclick = o.on;
-    box.appendChild(b);
-  }
+  box.className = 'opts';
+  for (const o of options) box.appendChild(optRow(o));
 }
 
 function openAgeGate() {
@@ -374,55 +386,105 @@ const PLACES = () => [
   { label: '🛣️ Highway Dhaba', x: -220, z: 330, h: -Math.PI / 2, drive: true },
   { label: '🔫 Kallu Kattewala (Park)', x: -121, z: 151, h: Math.PI / 2 },
   ...(districts?.places || []),
-  ...world.triggers.filter((t) => t.def.items && !t.keeper?.stall).map((t) => ({ label: `${t.def.avatar} ${t.def.name[L()]}`, x: t.x, z: t.z + (t.def === GHAT ? 5 : 0), h: t.heading })),
+  ...world.triggers.filter((t) => t.def.items && !t.keeper?.stall).map((t) => ({ label: `${t.def.avatar} ${t.def.name[L()]}`, x: t.x, z: t.z + (t.def === GHAT ? 5 : 0), h: t.heading, shop: t.keeper && t.def !== GHAT })),
+  ...world.triggers.filter((t) => t.keeper?.stall && t.def.items).map((t) => ({ label: `${t.def.avatar} ${t.def.name[L()]}`, x: t.front?.x ?? t.x, z: t.front?.z ?? t.z, h: t.heading, shop: true })),
 ];
+// 🗺️ naksha pe tap → sabse paas ki sadak/footpath pe pahuncho
+function mapPick(x, z) {
+  if (state.cine || state.scene || state.open === 'dead' || state.seq?.type === 'salon') return toast('Abhi nahi ja sakte 😅', 1500);
+  const wantDrive = state.mode === 'drive';
+  const ok = wantDrive ? (px, pz) => driveable(px, pz) : (px, pz) => footable(px, pz);
+  for (let r = 0; r < 120; r += 2) for (let a = 0; a < 16; a++) {
+    const px = x + Math.cos(a * 0.39) * r, pz = z + Math.sin(a * 0.39) * r;
+    if (ok(px, pz)) {
+      teleport({ x: px, z: pz, h: state.mode === 'drive' ? car.heading : walker.heading, drive: wantDrive });
+      return toast(`📍 Pahunch gaye — ${AREAS.find(([k]) => k === placeArea(px, pz))?.[2] || 'Shehar'}`, 1800);
+    }
+  }
+  toast('Wahan koi raasta nahi mila 🤷', 1500);
+}
+function placeArea(x, z) {
+  if (z > 465) return 'old';
+  if (x < -185) return 'gaon';
+  if (x > 185) return 'tech';
+  if (z > 300 && Math.abs(x) > 60) return 'hwy';
+  if (z < -95) return 'ghat';
+  return 'mohalla';
+}
+const AREAS = [['mohalla', '🏘️', 'Mohalla'], ['shops', '🛍️', 'Dukaanein'], ['ghat', '🌊', 'Ghat & Nadi'], ['gaon', '🌾', 'Rampur Gaon'], ['tech', '🏙️', 'Cyber City'], ['old', '🕌', 'Purana Shehar'], ['hwy', '🛣️', 'Highway']];
 function openPlaces() {
   closeSheets();
   state.open = 'places';
   const list = $('placeList');
   list.innerHTML = '';
-  const sv = document.createElement('button');
-  sv.className = 'item good';
-  sv.style.marginBottom = '10px';
-  sv.textContent = '💾 Save / Load (progress)';
-  sv.onclick = () => openSaveMenu();
-  list.appendChild(sv);
-  const cb = document.createElement('div');
-  cb.className = 'items';
-  cb.style.marginBottom = '10px';
-  for (const [txt, fn] of [['🏆 Leaderboard', () => openLeaderboard()], [cloud.user && !cloud.user.isAnonymous ? `☁️ ${cloud.name()}` : '🔐 Login / Account', () => openAccount()]]) {
-    const b = document.createElement('button');
-    b.className = 'item good';
-    b.textContent = txt;
+  list.className = 'places-body';
+  const here = state.mode === 'drive' ? car.pos : walker.pos;
+  const mk = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html) e.innerHTML = html; return e; };
+  // ⚡ jaldi ke kaam
+  const quick = mk('div', 'quick');
+  for (const [ic, txt, fn] of [['💾', 'Save / Load', () => openSaveMenu()], ['🏆', 'Top 10', () => openLeaderboard()], [cloud.user && !cloud.user.isAnonymous ? '☁️' : '🔐', cloud.user && !cloud.user.isAnonymous ? cloud.name() : 'Login', () => openAccount()], ['🗺️', 'Naksha', () => { closeSheets(); drawMap.open(); }]]) {
+    const b = mk('button', 'qbtn');
+    b.innerHTML = '<span class="qi"></span><span class="qt"></span>';
+    b.querySelector('.qi').textContent = ic; b.querySelector('.qt').textContent = txt;
     b.onclick = fn;
-    cb.appendChild(b);
+    quick.appendChild(b);
   }
-  list.appendChild(cb);
-  const tb = document.createElement('div');
-  tb.className = 'items';
-  tb.style.marginBottom = '12px';
+  list.appendChild(quick);
+  // 🕐 samay
+  list.appendChild(mk('div', 'sec', '<span>🕐</span> Samay'));
+  const seg = mk('div', 'seg');
   const P = PHASES[L()];
-  for (const [lbl, hr] of [[`🌅 ${P.morning}`, 7], [`☀️ ${P.noon}`, 12.5], [`🌇 ${P.evening}`, 17.7], [`🌙 ${P.night}`, 21]]) {
-    const b = document.createElement('button');
-    b.className = 'item';
-    b.textContent = lbl;
+  const curH = state.tod * 24;
+  for (const [ic, lbl, hr] of [['🌅', P.morning, 7], ['☀️', P.noon, 12.5], ['🌇', P.evening, 17.7], ['🌙', P.night, 21]]) {
+    const b = mk('button', !state.realTime && Math.abs(curH - hr) < 2 ? 'on' : '');
+    b.innerHTML = '<b></b><small></small>';
+    b.querySelector('b').textContent = ic; b.querySelector('small').textContent = lbl;
     b.onclick = () => { state.realTime = false; state.rtPref = false; state.tod = hr / 24; closeSheets(); };
-    tb.appendChild(b);
+    seg.appendChild(b);
   }
-  const rb = document.createElement('button');
-  rb.className = 'item good';
-  rb.textContent = state.realTime ? '🕐 Asli time: ON' : '🕐 Asli time (phone ka)';
+  const rb = mk('button', state.realTime ? 'on' : '');
+  rb.innerHTML = '<b>🕐</b><small>Asli time</small>';
   rb.onclick = () => { state.realTime = !state.realTime; state.rtPref = state.realTime; toast(state.realTime ? '🕐 Ab mohalla asli time pe chalega' : '⏩ Game time'); closeSheets(); };
-  tb.appendChild(rb);
-  list.appendChild(tb);
+  seg.appendChild(rb);
+  list.appendChild(seg);
+  // 🔍 search + jagah (ilaake ke hisaab se)
+  const search = mk('input', 'psearch');
+  search.placeholder = '🔍  Jagah dhoondo… (mandir, chai, mall)';
+  list.appendChild(search);
+  const groups = new Map(AREAS.map(([k]) => [k, []]));
+  const seen = new Set();
   for (const p of PLACES()) {
-    const b = document.createElement('button');
-    b.className = 'item';
-    b.innerHTML = '<span class="n"></span>';
-    b.querySelector('.n').textContent = p.label;
-    b.onclick = () => { teleport(p); closeSheets(); };
-    list.appendChild(b);
+    const key = p.label + Math.round(p.x) + Math.round(p.z);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    let a = placeArea(p.x, p.z);
+    if (p.shop && a === 'mohalla') a = 'shops';
+    groups.get(a).push({ ...p, dist: Math.hypot(p.x - here.x, p.z - here.z) });
   }
+  const sections = [];
+  for (const [k, ic, title] of AREAS) {
+    const items = groups.get(k);
+    if (!items.length) continue;
+    items.sort((a, b) => a.dist - b.dist);
+    const sec = mk('div', 'sec', `<span>${ic}</span> ${title} <em>${items.length}</em>`);
+    const box = mk('div', 'opts');
+    for (const p of items) {
+      const d = p.dist < 1000 ? `${Math.round(p.dist)} m` : `${(p.dist / 1000).toFixed(1)} km`;
+      const row = optRow({ n: p.label, d: p.drive ? '🛺 Gaadi ke saath' : '🚶 Paidal', right: d, on: () => { teleport(p); closeSheets(); toast(`📍 ${splitIcon(p.label)[1]}`, 1500); } });
+      row.dataset.q = p.label.toLowerCase();
+      box.appendChild(row);
+    }
+    list.append(sec, box);
+    sections.push([sec, box]);
+  }
+  search.oninput = () => {
+    const q = search.value.trim().toLowerCase();
+    for (const [sec, box] of sections) {
+      let any = false;
+      for (const r of box.children) { const ok = !q || r.dataset.q.includes(q); r.style.display = ok ? '' : 'none'; any ||= ok; }
+      sec.style.display = box.style.display = any ? '' : 'none';
+    }
+  };
   $('places').classList.remove('hidden');
 }
 $('clock').onclick = () => openPlaces();
@@ -2335,7 +2397,7 @@ async function boot() {
     sfx: (k) => { if (k === 'glass') noise(0.12, 0.35, 3000); else beep([880, 1320], 0.08, 'sine', 0.05); },
     load: () => { try { return JSON.parse(localStorage.getItem('mohalla.save') || 'null')?.story || 0; } catch { return 0; } }, save: () => saveGame(),
   });
-  drawMap = buildMinimap($('minimap'), { triggers: world.triggers, zones: ZONES, extraIcons: districts.icons });
+  drawMap = buildMinimap($('minimap'), { triggers: world.triggers, zones: ZONES, extraIcons: districts.icons, onPick: mapPick });
   ui3d = createUI3D(camera);
   const shopNames = Object.fromEntries(world.triggers.filter((tr) => tr.keeper).map((tr) => [tr.def.id, tr]));
   const DESTS = [
@@ -2358,6 +2420,7 @@ async function boot() {
     holdItem: (k) => { hold(me, k ? itemMesh(k) : state.weapon ? itemMesh(state.weapon) : null); setOverlay(me, k || state.weapon ? 'hold' : null); },
     isDancing: () => state.mode === 'foot' && !!keys.KeyQ,
     busy: () => !!(state.open || state.scene || state.cine || story?.active),
+    uiBusy: () => !!(state.open || state.scene || state.cine),
     jobDone: (k) => story?.jobDone(k),
     sfx: (k, i) => {
       if (k === 'coin') coinSfx();
@@ -2372,7 +2435,7 @@ async function boot() {
   setRetro(false);
   $('btnRetro').classList.add('on');
   $('btnRetro').textContent = '🎬';
-  if (location.search.includes('debug')) window.__m = { state, npcs, walker, get car() { return car; }, openGirl, toggleRide, teleport, openShop, world, interact, get traffic() { return traffic; }, attack, jump, openMusic, music, musicUI, get missions() { return missions; }, get ui3d() { return ui3d; }, get weapons() { return weapons; }, get story() { return story; }, toggleLift, startAim, stopAim, shoot, setAim: (y, p) => { aimYaw = y; aimPitch = p; }, buy: (id, n) => { const tr = world.triggers.find((t) => t.def.id === id); openShop(tr.def, tr); [...document.querySelectorAll('#shopItems .item')].find((b) => b.textContent.includes(n)).click(); } };
+  if (location.search.includes('debug')) window.__m = { state, npcs, walker, get car() { return car; }, openGirl, toggleRide, teleport, openShop, world, interact, get traffic() { return traffic; }, attack, jump, openMusic, music, musicUI, get missions() { return missions; }, get ui3d() { return ui3d; }, get weapons() { return weapons; }, get story() { return story; }, toggleLift, startAim, stopAim, shoot, setAim: (y, p) => { aimYaw = y; aimPitch = p; }, buy: (id, n) => { const tr = world.triggers.find((t) => t.def.id === id); openShop(tr.def, tr); [...document.querySelectorAll('#shopItems .opt')].find((b) => b.textContent.includes(n)).click(); } };
   $('money').textContent = state.money;
   updateLivesHud();
   // ☁️ Firebase — background mein; fail ho to game offline chalta hai

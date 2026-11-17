@@ -18,9 +18,11 @@ import { createEyeLock } from './eyelock.js';
 import { buildNPCs } from './npcs.js';
 import { makeHuman, updateHuman, setAction, setOverlay, hold, itemMesh } from './humans.js';
 import { peopleLOD } from './people.js';
-import { speak, setVoice, voiceOn, voiceSupported, voiceInfo, stopSpeaking } from './voice.js';
-import { aiLine, aiFresh, aiChat, aiAvailable } from './ai.js';
-import { playLoveTheme } from './lovetheme.js';
+import { speak, setVoice, voiceOn, voiceSupported, voiceInfo, stopSpeaking, setQuietWhen } from './voice.js';
+import { aiLine, aiFresh, aiChat, aiAvailable, aiScene } from './ai.js';
+import { playLoveTheme, playClubBeat, playSpaTheme } from './lovetheme.js';
+import { buildSpa } from './spa.js';
+import { buildClub } from './club.js';
 import { EXTRA, mergeExtra } from './extralines.js';
 import { buildTraffic } from './traffic.js';
 import { buildHotel } from './hotel.js';
@@ -363,7 +365,7 @@ function say(text, sub) {
 // 💬 baat-cheet wale dialog (mission, ladki) — neeche subtitle jaisa, line type hoti dikhe + bole
 const TALK_KINDS = new Set(['story', 'girl']);
 let dlgTok = 0, typeTimer = 0, curVoice = null; // curVoice = { female, who } — dialog mein kaun bol raha hai
-function typeLine(text) {
+function typeLine(text, queue = false) {
   const el = $('shopSay');
   clearInterval(typeTimer);
   el.textContent = '';
@@ -374,15 +376,17 @@ function typeLine(text) {
     el.textContent = chars.slice(0, i).join('');
     if (i >= chars.length) clearInterval(typeTimer);
   }, 18);
-  if (curVoice) speak(text, { ...curVoice, priority: true });
+  if (curVoice) speak(text, { ...curVoice, priority: true, queue });
 }
-function dialog({ kind, avatar, title, sub, line, options, ai, female, voice }) {
+function dialog({ kind, avatar, title, sub, line, options, ai, female, voice, chat }) {
   closeSheets();
   state.open = kind;
   const tok = ++dlgTok;
   const talk = TALK_KINDS.has(kind);
   curVoice = voice || (talk ? { female: !!female, who: 'dlg:' + title } : null);
-  $('chatBar').classList.add('hidden'); chatGirl = null;
+  $('chatBar').classList.add('hidden'); chatGirl = null; chatNpc = null;
+  // 💬 dukaandaar / mission wale se bhi apni marzi ki baat (type ya mic)
+  if (chat) { chatNpc = { ...chat, female: !!curVoice?.female, tok }; $('chatBar').classList.remove('hidden', 'busy'); $('chatIn').value = ''; }
   $('shop').classList.toggle('talk', talk);
   $('shopAvatar').textContent = avatar;
   $('shopName').textContent = title;
@@ -771,7 +775,7 @@ function interact() {
   openShop(nearest.def, nearest);
 }
 // naam se andaaza: dukaan pe aurat hai ya aadmi (aawaz ke liye)
-const FEM_NAME = /devi|bai|shabnam|rani|didi|aunty|mausi|kumari|begum|chachi|bhabhi|amma|nani|dadi|beauty|parlour|parlor|mehendi/i;
+const FEM_NAME = /devi|bai\b|shabnam|rani|didi|aunty|mausi|kumari|begum|chachi|bhabhi|amma|nani|dadi|beauty|parlour|parlor|mehendi/i;
 function shopGreeting(def) {
   const respectful0 = ['mandir', 'masjid', 'ghat'].includes(def.id);
   return aiLine(`shop:${def.id}:${L()}:${state.level}`, { who: def.owner || def.name[L()], role: `${def.name[L()]} ka maalik/dukaandaar`, situation: respectful0 ? 'koi aaya hai, aadar se swagat karo' : 'grahak dukaan pe aaya hai, apne andaaz mein swagat karo aur saaman bechne ki koshish', lang: L(), spicy: state.level === 2 && !respectful0 }, () => shopGreetingOld(def));
@@ -782,7 +786,7 @@ function shopGreetingOld(def) {
   return pick(state.level >= 1 && !respectful ? [...def.greet[L()], ...def.gaali[L()], ...def.gaali[L()]] : def.greet[L()]);
 }
 function openShop(def, trig) {
-  dialog({ kind: 'shop', avatar: def.avatar, title: def.name[L()], sub: def.owner, line: shopGreeting(def), options: shopOptions(def, trig), voice: { female: FEM_NAME.test(`${def.owner || ''} ${def.name[L()]}`), who: 'shop:' + def.id } });
+  dialog({ kind: 'shop', avatar: def.avatar, title: def.name[L()], sub: def.owner, line: shopGreeting(def), options: shopOptions(def, trig), chat: { key: 'shop:' + def.id, name: def.owner || def.name[L()], role: `${def.name[L()]} ka maalik/dukaandaar`, items: def.items.map((it) => `${it.n} ₹${it.p ?? 0}`).join(', ') }, voice: { female: FEM_NAME.test(`${def.owner || ''} ${def.name[L()]}`), who: 'shop:' + def.id } });
   state.activeShop = def.id;
   beep([660, 880], 0.08, 'sine', 0.05);
 }
@@ -798,7 +802,7 @@ function shopReact(def, trig, line, { mesh, sub, cls = '' } = {}) {
   const kid = trig?.keeper?.id || def.id;
   const kp = npcs.giveItem(kid, mesh);
   const target = kp ? kp.h.root : { x: trig?.x ?? walker.pos.x, y: 0.4, z: trig?.z ?? walker.pos.z };
-  if (line) ui3d.bubble(target, line, cls, bubDur(line));
+  if (line) ui3d.bubble(target, line, cls, bubDur(line), null, { priority: true, queue: true, female: FEM_NAME.test(`${def.owner || ''} ${def.name[L()]}`), who: 'shop:' + def.id });
   if (mesh && state.mode === 'foot') {
     setTimeout(() => {
       if (state.seq) return;
@@ -841,6 +845,7 @@ function buy(def, it, trig) {
     shopReact(def, trig, line || 'Le lo 💥', { sub: `${it.n} haath mein! J (ya 👊) se maaro 💥` });
     return;
   }
+  if (it.fx?.startsWith('spa_')) return startSpa(it); // 🌿 spa seva → chhota scene + asar
   if (!it.kind && ['sugar', 'turbo', 'fire', 'full'].includes(it.fx) && state.mode === 'foot') {
     // khareeda → dukaandaar haath mein deta hai → turant khaana shuru 😋
     const mesh = guessMesh(it);
@@ -963,17 +968,34 @@ function finishSalon(s) {
 
 // ---------- LADKI SE BAAT 💬 ----------
 function bestGift() { return state.bag.filter((b) => b.kind === 'gift').sort((a, b) => b.gift - a.gift)[0]; }
-function girlLine(key) {
+const GIRL_SIT = {
+  yes: 'player ne propose kiya aur wo haan keh rahi hai — khushi, sharm',
+  no: 'player ka propose / pickup line thukra rahi hai — nakhra ya chidh',
+  slap: 'player ne badtameezi ki, thappad maarte hue gusse mein daant rahi hai',
+  gift: 'player ne abhi tohfa diya, khush ho ke le rahi hai',
+  laugh: 'player ki mazaakiya pickup line pe hansi aa gayi, thoda pasand aaya',
+  already: 'wo player ki girlfriend hai, player ne kaha saath chalo — pyaar se haan',
+};
+function girlLineOld(key) {
   if (key === 'no') return gaali('girlNo') || pick(GIRL[L()].no);
   if (key === 'slap') return gaali('girlSlap') || pick(GIRL[L()].slap);
-  return pick(GIRL[L()][key]);
+  const v = GIRL[L()][key];
+  return Array.isArray(v) ? pick(v) : v;
+}
+// har reaction Claude se naya (pool), na mile to purani likhi line
+function girlLine(key) {
+  if (!GIRL_SIT[key]) return girlLineOld(key);
+  return aiLine(`girlr:${key}:${L()}:${state.level}`, { who: 'mohalle ki ladki', role: 'mohalle ki jawaan ladki (18+)', situation: GIRL_SIT[key], lang: L(), spicy: state.level === 2 && (key === 'no' || key === 'slap') }, () => girlLineOld(key));
 }
 // Popup turant band — jawab duniya mein bubble ban ke dikhe, action aankhon ke saamne ho
 const bubDur = (txt) => Math.min(7, Math.max(2.8, (txt || '').length / 13));
-function meSay(text, cls = '') { ui3d.bubble(me.root, text, cls, bubDur(text)); }
+// 🗣️ baat-cheet ki aawazein: hero ki hamesha ek, har ladki ki apni ek — aur ek-doosre ki baat nahi kaat-te
+const HERO_VO = { priority: true, female: false, who: 'hero' };
+const girlVo = (n) => ({ priority: true, queue: true, female: true, who: 'girl:' + n.girl.name });
+function meSay(text, cls = '') { ui3d.bubble(me.root, text, cls, bubDur(text), null, HERO_VO); }
 function girlReact(n, text, { cls = '', act = 'talk', sub } = {}) {
   const dur = bubDur(text);
-  ui3d.bubble(n.h.root, text, cls, dur);
+  ui3d.bubble(n.h.root, text, cls, dur, null, girlVo(n));
   if (!n.girl.gf) { n.pause = dur + 0.5; n.pauseAct = act; n.faceTo = { x: walker.pos.x, z: walker.pos.z }; }
   if (sub) toast(sub, 2600);
 }
@@ -990,7 +1012,7 @@ function handOver(n, mesh, after = 900) {
 function openGirl(n) {
   const g = n.girl;
   const opts = g.gf ? [
-    { n: '💞 Saath chalo', d: 'Tumhare peeche peeche', on: () => { closeSheets(); meSay('Chalo mere saath 😊'); setTimeout(() => girlReact(n, GIRL[L()].already, { cls: 'love' }), 700); } },
+    { n: '💞 Saath chalo', d: 'Tumhare peeche peeche', on: () => { closeSheets(); meSay('Chalo mere saath 😊'); setTimeout(() => girlReact(n, girlLine('already'), { cls: 'love' }), 700); } },
     { n: '🤗 Jhappi (hug)', d: 'Kas ke gale lagao', on: () => runScene(hugScene(n)) },
     { n: '💋 Kiss karo', d: 'Ek pyaari si pappi 😘', on: () => runScene(kissScene(n)) },
     { n: '🛏️ Hotel room chalo', p: 250, d: 'Kamre mein slow dance + saath mein neend → subah', on: () => {
@@ -1013,7 +1035,7 @@ function openGirl(n) {
     { n: '😘 Seeti maaro / chhedo', cls: 'danger', d: 'Galat baat — anjaam bhugtoge', on: () => tease(n) },
     { n: '👋 Bye', on: () => closeSheets() },
   ];
-  dialog({ kind: 'girl', avatar: g.gf ? '💞' : '👩', title: g.name, sub: g.gf ? 'Tumhari girlfriend' : `Mohalle ki ${g.name}`, line: g.slapped > 0 ? '…phir aa gaye? 😒' : aiLine(`girl:${g.name}:${L()}:${!!g.gf}`, { who: g.name, role: g.gf ? 'player ki girlfriend, mohalle ki ladki' : 'mohalle ki ladki, player ko thoda jaanti hai', situation: g.gf ? 'boyfriend mila, pyaar se baat' : 'player paas aa ke baat karna chahta hai, thoda nakhra/sharam/mazaak', lang: L(), spicy: false }, () => pick(GIRL[L()].hello)), options: opts, female: true });
+  dialog({ kind: 'girl', avatar: g.gf ? '💞' : '👩', title: g.name, sub: g.gf ? 'Tumhari girlfriend' : `Mohalle ki ${g.name}`, line: g.slapped > 0 ? '…phir aa gaye? 😒' : aiLine(`girl:${g.name}:${L()}:${!!g.gf}`, { who: g.name, role: g.gf ? 'player ki girlfriend, mohalle ki ladki' : 'mohalle ki ladki, player ko thoda jaanti hai', situation: g.gf ? 'boyfriend mila, pyaar se baat' : 'player paas aa ke baat karna chahta hai, thoda nakhra/sharam/mazaak', lang: L(), spicy: false }, () => pick(GIRL[L()].hello)), options: opts, female: true, voice: { female: true, who: 'girl:' + g.name } });
   n.talking = true;
   state.talkGirl = n;
   openChat(n);
@@ -1023,7 +1045,8 @@ const PERSONAS = [
   'sharmili, kam bolti, par dil ki saaf', 'chulbuli, mazaakiya, taane maarti rehti', 'tez-tarraar, muh-phat, kisi se nahi darti',
   'padhaku, seedhi-saadi, izzat pasand', 'filmi, Shah Rukh ki fan, bahut romantic', 'nakhrewali, attitude wali, tareef pasand',
 ];
-let chatGirl = null, rec = null;
+let chatGirl = null, chatNpc = null, rec = null;
+const npcHist = new Map(); // har dukaandaar/kirdaar se pichhli baat yaad
 function proposeChance(n) {
   const g = n.girl, t = state.t;
   let score = 0.12 + g.affinity;
@@ -1062,17 +1085,31 @@ function offlineReply(n, text, propose) {
   if (GAALI_RE.test(text)) return { reply: state.level === 2 ? pick(['Kya bola be? Muh tod dungi kamine! 😡', 'Tameez se baat kar, chutiye! 😤']) : pick(['Tameez naam ki cheez hai ki nahi? 😡', 'Zabaan sambhaal ke baat karo! 😤']), mood: 'angry', affinity: -3, action: g.slapped > 0 || Math.random() < 0.6 ? 'slap' : 'walk_away' };
   if (propose) return Math.random() < proposeChance(n) ? { reply: girlLine('yes'), mood: 'love', affinity: 2, action: 'accept' } : { reply: girlLine('no'), mood: 'annoyed', affinity: -1, action: 'reject' };
   if (LOVE_RE.test(text)) return { reply: g.gf ? pick(EXTRA[L()].girlAlready) : pick(SHY_LINES), mood: 'shy', affinity: 1, action: 'none' };
+  // AI band ho tab bhi jawab baat se juda ho
+  const T = [
+    [/naam|नाम|name/i, [`${g.name}… aur tumhara?`, `${g.name} naam hai mera. Yaad rakhna 😊`]],
+    [/kais[ie] ho|kya haal|haal chaal|कैसी हो|क्या हाल|how are/i, ['Main theek hoon, tum batao?', 'Bas badhiya… tum kaise ho?', 'Theek hi hoon, ghar ka kaam khatam hi nahi hota 😅']],
+    [/kya kar rah|क्या कर रह/i, ['Bas sabzi lene nikli thi, tum?', 'Kuch nahi, saheli ke ghar ja rahi thi', 'Tumse baat kar rahi hoon, aur kya 😄']],
+    [/kahan (ja|rehti|rahti)|कहाँ (जा|रह)/i, ['Yahin paas mein, mandir wali gali mein', 'Bazaar tak ja rahi hoon, kyun?', 'Ghar ja rahi hoon, mummy intezaar kar rahi hain']],
+    [/khana|khaana|chai|खाना|चाय|samosa|golgapp/i, ['Chai? Haan, par mummy ko pata nahi chalna chahiye 😄', 'Abhi khaana kha ke aayi hoon, phir kabhi', 'Golgappe khilaoge to sochungi 😋']],
+    [/sorry|maaf|सॉरी|माफ/i, ['Theek hai, is baar maaf kiya 😌', 'Hmm… aage se dhyaan rakhna']],
+    [/namaste|hello|^hi\b|^hey\b|नमस्ते|हेलो|हाय/i, ['Namaste! Kaise ho?', 'Hello ji, aaj idhar kaise? 😊']],
+    [/bye|chalta|chalti|alvida|phir milenge|बाय|चलता/i, ['Theek hai, phir milte hain 👋', 'Achha, sambhal ke jaana 😊']],
+    [/film|picture|gaana|gana|फिल्म|गाना|cricket|match/i, ['Mujhe to Shah Rukh ki filmein pasand hain, tumhe?', 'Gaane sunna bahut pasand hai mujhe 🎶', 'Match? Papa TV chhodte hi nahi 😄']],
+  ];
+  for (const [re, ls] of T) if (re.test(text)) return { reply: pick(ls), mood: 'neutral', affinity: 0, action: 'none' };
   if (/\?$|kya|kaise|kahan|kab|kaun|क्या|कैसे/i.test(text)) return { reply: pick(['Pata nahi, tum batao 🤔', 'Ye bhi koi poochhne ki baat hai? 😄', 'Hmm… sochna padega', 'Tumhe kya lagta hai?', 'Kal bataungi, abhi jaldi mein hoon']), mood: 'neutral', affinity: 0, action: 'none' };
   return { reply: pick(GIRL[L()].hello), mood: 'neutral', affinity: 0, action: 'none' };
 }
-async function girlChat(n, text, { propose: prop = false } = {}) {
+async function girlChat(n, text, { propose: prop = false, mic = false } = {}) {
   const g = n.girl;
   text = String(text || '').trim();
   if (!text || g.chatBusy) return;
   g.chatBusy = true;
   g.persona ||= pick(PERSONAS);
   g.chat ||= [];
-  ui3d.bubble(me.root, text, prop ? 'love' : '', bubDur(text), false);
+  // apni line hero ki aawaz mein (mic se bola ho to nahi — wo to tumne khud bola)
+  ui3d.bubble(me.root, text, prop ? 'love' : '', bubDur(text), mic ? false : null, HERO_VO);
   g.chat.push({ who: 'player', text });
   const open = () => state.open === 'girl' && chatGirl === n;
   if (open()) { $('shopSay').textContent = '…'; $('shopSay').classList.add('typing'); $('chatBar').classList.add('busy'); }
@@ -1091,10 +1128,10 @@ async function girlChat(n, text, { propose: prop = false } = {}) {
   const cls = r.mood === 'angry' || r.mood === 'annoyed' ? 'loud' : r.mood === 'love' || r.mood === 'shy' || r.mood === 'flirty' ? 'love' : '';
   if (open()) {
     $('shopSay').classList.remove('typing'); $('chatBar').classList.remove('busy');
-    typeLine(r.reply); // dialog mein likha + ladki ki aawaz
+    typeLine(r.reply, true); // dialog mein likha + ladki ki aawaz (hero ki baat poori hone ke baad)
     ui3d.bubble(n.h.root, r.reply, cls, bubDur(r.reply), false);
     if (!isTouch) $('chatIn').focus();
-  } else ui3d.bubble(n.h.root, r.reply, cls, bubDur(r.reply), n.h.root);
+  } else ui3d.bubble(n.h.root, r.reply, cls, bubDur(r.reply), null, girlVo(n));
   if (!g.gf) { n.pause = 6; n.pauseAct = r.mood === 'angry' ? 'point' : 'talk'; n.faceTo = { x: walker.pos.x, z: walker.pos.z }; }
   if (r.affinity) toast(`${r.affinity > 0 ? '💗' : '💔'} ${g.name}: ${r.affinity > 0 ? '+' : ''}${r.affinity} pasand`, 1400);
   // ladki ka faisla 👇
@@ -1111,14 +1148,41 @@ async function girlChat(n, text, { propose: prop = false } = {}) {
     default: break;
   }
 }
-function sendChat() {
+function sendChat(mic = false) {
   const n = chatGirl;
-  if (!n) return;
+  if (!n && !chatNpc) return;
   const v = $('chatIn').value;
   $('chatIn').value = '';
-  girlChat(n, v);
+  if (n) girlChat(n, v, { mic }); else npcChat(chatNpc, v, mic);
 }
-$('chatSend').onclick = sendChat;
+const NPC_OFF = {
+  hi: ['Haan bhai, bolo kya chahiye?', 'Saaman saamne hai, dekh lo aaraam se', 'Baatein baad mein, pehle batao lena kya hai 😄', 'Arre bhai, dhandhe ka time hai, jaldi bolo'],
+  bho: ['Haan babua, bola ka chahi?', 'Saaman saamne ba, dekh la aaraam se', 'Baat baad mein, pahile batava lebe ke ka ba 😄'],
+};
+async function npcChat(c, text, mic) {
+  text = String(text || '').trim();
+  if (!text || c.busy) return;
+  c.busy = true;
+  let hist = npcHist.get(c.key);
+  if (!hist) { hist = []; npcHist.set(c.key, hist); }
+  ui3d.bubble(me.root, text, '', bubDur(text), mic ? false : null, HERO_VO);
+  const open = () => chatNpc === c && c.tok === dlgTok && !$('shop').classList.contains('hidden');
+  clearInterval(typeTimer);
+  $('shopSay').textContent = '…'; $('shopSay').classList.add('typing'); $('chatBar').classList.add('busy');
+  const res = await aiChat({
+    npc: { name: c.name, role: c.role, female: c.female, items: c.items || '', info: c.info || '', where: whereNow(), money: state.money },
+    history: hist.slice(-10), text, lang: L(), spicy: state.level === 2,
+  }, 12000, 'npc');
+  c.busy = false;
+  const reply = res?.reply || pick(NPC_OFF[L()]);
+  hist.push({ who: 'player', text }, { who: 'npc', text: reply });
+  if (hist.length > 24) hist.splice(0, hist.length - 24);
+  if (!open()) return;
+  $('shopSay').classList.remove('typing'); $('chatBar').classList.remove('busy');
+  typeLine(reply, true);
+  if (!isTouch) $('chatIn').focus();
+}
+$('chatSend').onclick = () => sendChat();
 $('chatIn').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); sendChat(); } if (e.key === 'Escape') closeSheets(); });
 // 🎤 mic se bolo (Chrome/Edge; Hindi samajhta hai)
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1131,7 +1195,7 @@ $('chatMic').onclick = () => {
   rec.interimResults = true;
   rec.maxAlternatives = 1;
   $('chatMic').classList.add('on');
-  $('chatIn').placeholder = '🎤 Bolo… sun rahi hoon';
+  $('chatIn').placeholder = '🎤 Bolo… sun rahe hain';
   let finalText = '';
   rec.onresult = (e) => {
     let txt = '';
@@ -1143,7 +1207,7 @@ $('chatMic').onclick = () => {
     $('chatMic').classList.remove('on');
     $('chatIn').placeholder = 'Kuch bhi bolo… type karo ya 🎤 dabao';
     rec = null;
-    if ($('chatIn').value.trim()) sendChat();
+    if ($('chatIn').value.trim()) sendChat(true);
   };
   try { rec.start(); } catch { rec = null; $('chatMic').classList.remove('on'); }
 };
@@ -1156,7 +1220,7 @@ function giveGift(n) {
   n.girl.affinity += gft.gift * 0.1;
   meSay(`Ye tumhare liye… ${gft.n} 🎁`);
   handOver(n, gft.mesh);
-  setTimeout(() => girlReact(n, pick(GIRL[L()].gift), { cls: 'love', sub: `💗 ${n.girl.name} ko ${gft.n} pasand aaya (+pasand)` }), 1200);
+  setTimeout(() => girlReact(n, girlLine('gift'), { cls: 'love', sub: `💗 ${n.girl.name} ko ${gft.n} pasand aaya (+pasand)` }), 1200);
 }
 function propose(n) {
   if (aiAvailable()) return girlChat(n, '🌹 Kya tum meri girlfriend banogi?', { propose: true });
@@ -1206,11 +1270,12 @@ const TAPORI = {
 const SEETI18 = { hi: ['😗🎶 Wheeew! Aye hoye, kya chaal hai!', '😏 Oye hoye! Kahan chali sawaari?', '😗 Seeti! Ek baar mud ke toh dekho!'], bho: ['😗🎶 Wheeew! Ae hoye, ka chaal ba!', '😏 Ae hoye! Kahan chalalu?', '😗 Seeti! Ek beri mud ke ta dekha!'] };
 function pickup(n) {
   const g = n.girl, r = Math.random();
+  if (state.level !== 2 && aiAvailable()) return girlChat(n, pick(PICKUP[L()])); // jo line maari, usi ka jawab
   closeSheets();
   if (state.level === 2) {
     meSay(`"${pick(TAPORI[L()])}"`);
     setTimeout(() => {
-      if (r < 0.08 + g.affinity * 0.15) { g.affinity += 0.05; girlReact(n, pick(GIRL[L()].laugh), { cls: 'love' }); }
+      if (r < 0.08 + g.affinity * 0.15) { g.affinity += 0.05; girlReact(n, girlLine('laugh'), { cls: 'love' }); }
       else if (r < 0.45) { g.rejected += 1; girlReact(n, girlLine('no'), { cls: 'loud', act: 'point' }); }
       else { slap(n); if (Math.random() < 0.4) { addWanted(1); setTimeout(() => toast(POLICE[L()].tease, 2600), 1800); } }
     }, 1100);
@@ -1218,7 +1283,7 @@ function pickup(n) {
   }
   meSay(`"${pick(PICKUP[L()])}"`);
   setTimeout(() => {
-    if (r < 0.25 + g.affinity * 0.3) { g.affinity += 0.08; girlReact(n, pick(GIRL[L()].laugh), { cls: 'love' }); }
+    if (r < 0.25 + g.affinity * 0.3) { g.affinity += 0.08; girlReact(n, girlLine('laugh'), { cls: 'love' }); }
     else if (r < 0.88) { g.rejected += 0.5; girlReact(n, girlLine('no'), { cls: 'loud', act: 'point' }); }
     else slap(n);
   }, 1100);
@@ -1239,20 +1304,24 @@ function slap(n) {
   g.gf = false;
   // wo chal ke paas aati hai aur chaata maarti hai
   n.heading = headingTo(walker.pos.x - n.x, walker.pos.z - n.z);
+  // hero uski taraf mude — gaal saamne ho
+  walker.heading = headingTo(n.x - walker.pos.x, n.z - walker.pos.z);
+  me.root.rotation.y = walker.heading;
   setAction(n.h, 'slap');
   n.slapT = 1.4;
   n.pause = 0;
   setTimeout(() => {
     slapSfx();
+    me.look = -1.1; // chaate ke jhatke se sar doosri taraf
+    setTimeout(() => { me.look = 0; }, 900);
     flash('slap');
     state.stunUntil = state.t + 1.0;
     state.hurtUntil = state.t + 0.5;
-    me.look = 1.1;
     // jhatka — thoda peeche khisko
     const kx = walker.pos.x - n.x, kz = walker.pos.z - n.z, kd = Math.hypot(kx, kz) || 1;
     const nx = walker.pos.x + (kx / kd) * 0.7, nz = walker.pos.z + (kz / kd) * 0.7;
     if (!footBlocked(nx, nz)) walker.pos.set(nx, 0, nz);
-    ui3d.bubble(n.h.root, '👋💥 ' + girlLine('slap'), 'loud', 3.2);
+    ui3d.bubble(n.h.root, '👋💥 ' + girlLine('slap'), 'loud', 3.2, null, girlVo(n));
     toast('👋 CHATAAAK!', 1500);
   }, 450);
   setTimeout(() => { n.pause = 2.5; n.pauseAct = 'point'; n.faceTo = { x: walker.pos.x, z: walker.pos.z }; }, 1500);
@@ -1309,6 +1378,7 @@ function setRetro(on) {
 $('btnFP').onclick = () => toggleFP();
 // 🔊 dialogue ki aawaz chalu/band
 $('btnVoice').classList.toggle('on', voiceOn());
+setQuietWhen(() => !!state.open); // kisi se baat / scene chal raha ho to raah chalte log chup
 if (!voiceSupported) $('btnVoice').style.display = 'none';
 $('btnVoice').onclick = () => { setVoice(!voiceOn()); $('btnVoice').classList.toggle('on', voiceOn()); $('btnVoice').textContent = voiceOn() ? '🔊' : '🔇'; toast(voiceOn() ? '🔊 Dialogue ki aawaz ON' : '🔇 Aawaz band', 1500); };
 $('btnVoice').textContent = voiceOn() ? '🔊' : '🔇';
@@ -1324,7 +1394,38 @@ function runScene(sc) {
   $('prompt').classList.add('hidden');
   $('mAct').classList.add('hidden');
   sc.setup();
+  if (sc.talk) setupTalk(state.scene);
 }
+// 💬 romantic scene: narration nahi — hero-heroine ki aapas ki baat, Claude us pal ke hisaab se likhe
+// talk = { scene: 'kya ho raha hai', slots: [line index], order: ['hero'|'heroine'], gf, fallback: [[...]] }
+function whereNow() {
+  const hr = state.tod * 24, p = walker.pos;
+  const when = hr < 5 ? 'aadhi raat' : hr < 10 ? 'subah' : hr < 16 ? 'dopahar' : hr < 19.5 ? 'shaam' : 'raat';
+  const place = Math.hypot(p.x, p.z + 110) < 30 ? 'Prem Ghat, Ganga kinare' : Math.hypot(p.x - hotel.center.x, p.z - hotel.center.z) < 40 ? 'Hotel Raj Palace' : 'mohalle ki gali';
+  return `${place}, ${when} (${Math.floor(hr)} baje)`;
+}
+function setupTalk(s) {
+  const t = s.talk, n = s.lines.length;
+  const fb = pick(t.fallback);
+  s.lines = Array(n).fill(''); s.speakers = Array(n).fill(null);
+  t.slots.forEach((slot, i) => { s.lines[slot] = fb[i] || ''; s.speakers[slot] = t.order[i]; });
+  s.talkPending = true;
+  const g = t.gf?.girl;
+  aiScene({ scene: t.scene, where: whereNow(), heroine: g?.name, persona: g?.persona, hero: 'hero', history: g?.chat?.slice(-8) || [], order: t.order, lang: L() })
+    .then((ls) => {
+      if (state.scene !== s) return;
+      s.talkPending = false;
+      if (!ls?.length) return;
+      t.slots.forEach((slot, i) => { if (slot > s.sub && ls[i]?.text) { s.lines[slot] = ls[i].text; s.speakers[slot] = ls[i].who; } });
+    });
+}
+const SCN = {
+  kiss: [['Aaj tum kuch zyada hi khoobsurat lag rahi ho…', 'Bas karo… sab dekh rahe honge 🙈', ''], ['Ek baat kahun? Tumhare bina ab din nahi kat-ta', 'Pagal… mujhe bhi 🙈', ''], ['Aankhein band karo na…', 'Kyun? …achha theek hai 😳', '']],
+  hug: [['Kitni der se tumhe dekhna tha…', 'To ab jaane mat dena 🥹'], ['Aao na, ek baar…', 'Hmm… bas thodi der 😊']],
+  dance: [['Pair mat kuchalna mera 😄', 'Tum sambhaalo to sahi!', 'Gaana bhi hamare jaisa hai na?', 'Bilkul… dheere-dheere 💕'], ['Itna paas? Sab dekh rahe hain', 'Dekhne do 😏', 'Tum to ekdum hero ho aaj', 'Aur tum meri heroine 💃']],
+  dinner: [['Menu mein sabse meetha kya hai?', 'Tum batao… 😏', 'Mere saamne baithi hai', 'Hatt! Khaana khao chupchaap 🙈'], ['Candle light… pehli baar aisa kuch?', 'Haan… achha laga 😊', 'Har hafte aayenge phir', 'Paise bachao pehle 😄']],
+  room: [['Thak gayi?', 'Thoda sa… par khush hoon 😊', 'Aao, ek aakhri gaana', 'Good morning… chai kaun banayega? ☀️😄'], ['Aaj ka din yaad rahega', 'Mujhe bhi… 💕', 'Batti bujha doon?', 'Uth jao, subah ho gayi ☀️']],
+};
 // scene ne khud gaana chalaya ho to scene ke saath hi band — warna party mode on rehta aur poora mohalla naachta rehta
 let sceneMusicTok = 0;
 function stopSceneMusic() { if (music.mode === 'file' && !music.audio.paused) music.audio.pause(); }
@@ -1359,7 +1460,12 @@ function updateScene(dt) {
   camera.lookAt(camLook);
   const lines = s.lines;
   const idx = Math.min(lines.length - 1, Math.floor((T / s.dur) * lines.length));
-  if (idx !== s.sub) { s.sub = idx; $('cineSub').textContent = lines[idx]; speak(lines[idx], { priority: true, female: idx % 2 === 1 }); }
+  const wait = s.talkPending && T < 2.4; // Claude ki likhi baat ka thoda intezaar
+  if (!wait && idx !== s.sub) {
+    s.sub = idx; $('cineSub').textContent = lines[idx];
+    const who = s.speakers?.[idx];
+    speak(lines[idx], { priority: true, female: who ? who === 'heroine' : idx % 2 === 1, who: who === 'heroine' ? 'girl:' + (s.talk?.gf?.girl?.name || '') : 'hero' });
+  }
   if (T >= s.dur) endScene();
 }
 function nightify() { const h = state.tod * 24; if (h > 6 && h < 18.5) { state.realTime = false; state.tod = 20.4 / 24; } state.romance = true; }
@@ -1368,7 +1474,7 @@ function dinnerScene(gf) {
   const tb = hotel.tables[0];
   const pX = tb.x + 1.05, gX = tb.x - 1.05, z = tb.z;
   return {
-    dur: 15, lines: SCENES[L()].dinner, kissed: false,
+    dur: 15, lines: ['', '', '', ''], talk: { scene: 'hotel mein candle-light dinner, aamne-saamne baithe, khaana aur pyaar bhari baatein', slots: [0, 1, 2, 3], order: ['hero', 'heroine', 'hero', 'heroine'], gf, fallback: SCN.dinner }, kissed: false,
     setup() {
       nightify();
       gf.scene = true;
@@ -1407,7 +1513,7 @@ function dinnerScene(gf) {
 function danceScene(gf) {
   const F = hotel.floor;
   return {
-    dur: 17, lines: SCENES[L()].dance, flashed: false,
+    dur: 17, lines: ['', '', '', ''], talk: { scene: 'hotel ke dance floor pe romantic gaane pe saath naach rahe hain, phir slow dance mein gale', slots: [0, 1, 2, 3], order: ['hero', 'heroine', 'hero', 'heroine'], gf, fallback: SCN.dance }, flashed: false,
     setup() {
       nightify();
       gf.scene = true;
@@ -1444,7 +1550,7 @@ function hugScene(gf) {
   const x = walker.pos.x, z = walker.pos.z, h = walker.heading;
   const fx = -Math.sin(h), fz = -Math.cos(h);
   return {
-    dur: 5, lines: SCENES[L()].hug,
+    dur: 7, lines: ['', ''], talk: { scene: 'dono ek-doosre ko kas ke gale laga rahe hain (jhappi)', slots: [0, 1], order: ['hero', 'heroine'], gf, fallback: SCN.hug },
     setup() {
       gf.scene = true;
       placeHuman(me, x, z, h, 'hug', heightAt(x, z));
@@ -1478,17 +1584,16 @@ const sm = (a, b, x) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a)));
 const CINE_LEN = 25;
 const shotPos = new THREE.Vector3(), shotLook = new THREE.Vector3();
 // 🎬 timeline: [shuru, line] — 0 narration, 1 hero ki shayari, 2 heroine ka jawab, 3 censor phool, 4 ant
-const KISS_T = [0, 3.2, 9.5, 16, 19.5];
+const KISS_T = [0, 3.5, 9, 14.5, 20]; // 0 chup (wide), 1 hero, 2 heroine, 3 kiss (chup), 4 ant (chup)
 function startKiss() {
   closeSheets();
   state.open = 'cine';
   const Lg = L();
   const sh = SHAYARI[Lg];
-  const c = state.cine = { t: 0, start: performance.now(), sub: -1, shot: '', chimed: false, lines: [KISS_LINES[Lg][0], pick(sh), pick(sh), KISS_LINES[Lg][2], KISS_LINES[Lg][3]], stopTheme: null, ourMusic: false };
-  // 🤖 taazi shayari (AI) — time pe aa gayi to wahi, warna likhi hui
-  const ask = (who, sit) => aiFresh({ who, role: 'premi, Ganga ghat pe chaandni raat', situation: sit, lang: Lg, spicy: false }, 3000);
-  ask('hero', 'apni mehbooba ke liye 2 line ki dil chhoo lene wali romantic shayari (Ganga, chaand, diya ka zikr). Do line ke beech " / " lagao.').then((l) => { if (l && state.cine === c && c.sub < 1) c.lines[1] = l.replace(/\s*\/\s*/g, ',\n'); });
-  ask('heroine', 'hero ki shayari ka sharmaate hue pyaar bhara 2 line ka jawab. Do line ke beech " / " lagao.').then((l) => { if (l && state.cine === c && c.sub < 2) c.lines[2] = l.replace(/\s*\/\s*/g, ',\n'); });
+  const c = state.cine = { t: 0, start: performance.now(), sub: -1, shot: '', chimed: false, lines: ['', pick(sh), pick(sh), '', ''], stopTheme: null, ourMusic: false };
+  // 🤖 dono ki aapas ki baat — Claude us pal ke hisaab se (narration nahi); na aaye to shayari
+  aiScene({ scene: 'Prem Ghat ki seedhi pe paas-paas baithe, chaandni raat, Ganga mein diye tair rahe, aas-paas aur jode; hero dil ki baat/shayari kahe, heroine sharmaate pyaar se jawab de; iske baad dono kiss karenge', where: 'Prem Ghat, Ganga kinare, raat', heroine: 'heroine', hero: 'hero', order: ['hero', 'heroine'], lang: Lg })
+    .then((ls) => { if (!ls || state.cine !== c) return; if (ls[0] && c.sub < 1) c.lines[1] = ls[0].text; if (ls[1] && c.sub < 2) c.lines[2] = ls[1].text; });
   // 🎻 background mein romantic gaana: koi gaana na baj raha ho to dhoondo, na mile to apni love-theme
   if (!music.playing) {
     c.ourMusic = true;
@@ -1524,33 +1629,34 @@ function updateCine(dt) {
   const T = c.t, C = couple.C, F = couple.F;
   if (c.stopTheme && music.playing) { c.stopTheme(); c.stopTheme = null; } // asli gaana der se mila → apni dhun band
   // shots: w = poora ghat (saare jode + diye), a = dheere-dheere couple ke paas, f = censor phool, b = jhuke hue, z = ant mein upar se
-  const shot = T < 3.2 ? 'w' : T < 16 ? 'a' : T < 19.5 ? 'f' : T < 22 ? 'b' : 'z';
+  const shot = T < 3.5 ? 'w' : T < 14.5 ? 'a' : T < 20.5 ? 'k' : 'z';
   if (shot === 'w') {
     shotPos.set(C.x - 10 + T * 1.2, C.y + 3.2, C.z + 9 - T * 0.6);
     shotLook.set(C.x - 2, C.y + 0.2, C.z - 3);
-  } else if (shot === 'f') {
-    shotPos.set(F.x + 0.9, F.y + 1.6, F.z - 1.5);
-    shotLook.set(F.x, F.y + 1.2, F.z);
-    couple.setFlowers(0.55 + 0.45 * Math.sin((T - 16) * 5));
+  } else if (shot === 'k') {
+    // 💋 kiss: bilkul side se, chehron ke paas — honth se honth
+    const k = sm(14.5, 16, T);
+    couple.setK(1, k);
+    shotPos.set(C.x + 0.1, C.y + 0.62, C.z - 1.55 + 0.25 * k);
+    shotLook.set(C.x, C.y + 0.62, C.z);
   } else if (shot === 'z') {
     const k = sm(22, CINE_LEN, T);
     shotPos.set(C.x + 1 - 6 * k, C.y + 1.6 + 5 * k, C.z + 3 + 7 * k);
     shotLook.set(C.x - 2 * k, C.y + 0.4, C.z - 4 * k);
-    couple.setK(1, 1);
+    couple.setK(0.85, 0.45); // kiss ke baad: paas-paas, sar jhuke
   } else {
     const push = shot === 'a' ? sm(3.2, 15, T) : 1;
     // saamne (nadi ki taraf) se — dono ke chehre dikhein
     shotPos.set(C.x + 2.4 - 1.5 * push, C.y + 0.9 - 0.2 * push, C.z - 3.6 + 1.4 * push);
     shotLook.set(C.x, C.y + 0.75, C.z);
-    if (shot === 'a') couple.setK(sm(4, 14, T), sm(10, 15, T) * 0.6);
-    else couple.setK(1, sm(19.5, 21, T));
+    couple.setK(sm(4, 14, T) * 0.75, 0);
   }
   if (fpv) me.root.visible = true;
   if (shot !== c.shot) { camera.position.copy(shotPos); camLook.copy(shotLook); c.shot = shot; }
   camera.position.lerp(shotPos, 1 - Math.exp(-dt * 2.2));
   camLook.lerp(shotLook, 1 - Math.exp(-dt * 2.2));
   camera.lookAt(camLook);
-  if (T > 14 && !c.chimed) { c.chimed = true; flash('love'); glide(1200, 1800, 0.5, 'sine', 0.04); glide(1500, 2200, 0.6, 'sine', 0.03, 0.3); }
+  if (T > 15.6 && !c.chimed) { c.chimed = true; flash('love'); glide(1200, 1800, 0.5, 'sine', 0.04); glide(1500, 2200, 0.6, 'sine', 0.03, 0.3); }
   let sub = 0;
   for (let i = 0; i < KISS_T.length; i++) if (T >= KISS_T[i]) sub = i;
   if (sub !== c.sub) {
@@ -1563,13 +1669,114 @@ function updateCine(dt) {
   if (T >= CINE_LEN) endCine();
 }
 
+// ---------- 🌿 MOHALLA SPA — champi, maalish, steam, facial (chhota scene + asar) ----------
+let spa = null, spaIn = false, spaThemeStop = null;
+function spaMusic() {
+  const now = spa.inside && state.mode === 'foot';
+  if (now === spaIn) return;
+  spaIn = now;
+  if (now) {
+    toast('🌿 Mohalla Spa — Meena didi se baat karo (E) 💆', 2600);
+    if (!music.playing && !spaThemeStop) spaThemeStop = playSpaTheme(music.ctxReady());
+  } else if (spaThemeStop) { spaThemeStop(); spaThemeStop = null; }
+}
+const SPA_TALK = {
+  spa_champi: ['Aankhein band karo, tel thoda garam hai 😊', 'Kitna tension leke ghoomte ho, sar ekdum akda hua hai', 'Bas… ab dimaag thanda ho gaya na?'],
+  spa_shoulder: ['Arre baap re, kandhe to patthar ho gaye hain!', 'Rickshaw chalate ho na? Peeth ka yahi haal hota hai', 'Ab saans lo gehri… haan, aise hi'],
+  spa_feet: ['Din bhar daudte ho, pair to thakenge hi', 'Talwe mein dabaav do to poora badan halka', 'Ab dekhna, hawa ki tarah chaloge 😄'],
+  spa_steam: ['Bhaap andar jaane do, saare rog bahar', 'Paseena aayega, ghabrana mat 😄', 'Bas dus minute aur… chehra chamak jaayega'],
+  spa_facial: ['Dhoop mein ghoom ke chehra jal gaya hai', 'Ye ubtan lagaati hoon, haldi-chandan wala', 'Ab dekho aaine mein — hero lag rahe ho 😉'],
+  spa_full: ['Aaj poora package? Waah, raja babu! 👑', 'Pehle champi, phir kandhe, phir steam', 'Ab ek naya insaan ban ke niklo 😊'],
+};
+function startSpa(it) {
+  closeSheets();
+  runScene(spaScene(it));
+}
+function spaScene(it) {
+  const k = it.fx, T = spa.tables[0], C = spa.chair, S = spa.steamC;
+  const onTable = k === 'spa_shoulder' || k === 'spa_full';
+  const steam = k === 'spa_steam';
+  const back = { x: walker.pos.x, z: walker.pos.z, h: walker.heading };
+  return {
+    dur: 12, lines: ['', '', ''],
+    setup() {
+      // didi ki baat — Claude us seva ke hisaab se (na mile to likhi hui)
+      const say = (i) => aiLine(`spa:${k}:${L()}`, { who: 'Sunita didi', role: 'Mohalla Spa ki maalish/champi karne wali didi, baatooni aur pyaari', situation: `${it.n} kar rahi hai customer ki; kaam karte hue aam baat-cheet (${i === 0 ? 'shuruaat' : i === 1 ? 'beech mein' : 'khatam hone pe'})`, lang: L(), spicy: false }, () => SPA_TALK[k][i]);
+      state.scene.lines = [say(0), say(1), say(2)];
+      state.scene.speakers = ['heroine', 'heroine', 'heroine'];
+      if (onTable) { // ulta leta — sar pashchim ki taraf
+        me.root.position.set(T.x + 0.95, T.y + 0.12, T.z);
+        me.root.rotation.set(-Math.PI / 2, Math.PI / 2, 0);
+        setAction(me, 'sleep');
+        spa.work(true, T.x - 0.2, T.z + 0.8, 0);
+      } else if (steam) {
+        placeHuman(me, S.x + 0.2, S.z - 0.6, Math.PI, 'sit', -0.08);
+        spa.work(false);
+      } else { // kursi: champi / facial / pair
+        placeHuman(me, C.x, C.z, Math.PI / 2, 'sit', -0.02);
+        if (k === 'spa_feet') spa.work(true, C.x - 1.0, C.z, -Math.PI / 2);
+        else spa.work(true, C.x + 0.75, C.z, Math.PI / 2);
+      }
+      hold(me, null);
+    },
+    update(T_) {
+      if (steam && Math.floor(T_ * 3) !== Math.floor((T_ - 0.05) * 3)) puff(S.x + (Math.random() - 0.5) * 2, 0.6, S.z, { color: 0xffffff, size: 0.5, life: 2, up: 0.5, spread: 1 });
+      if (k === 'spa_facial' || k === 'spa_champi') me.lookX = 0.25; // sar peeche tika
+    },
+    cam(T_, p, a) {
+      const ang = 0.6 + T_ * 0.05;
+      const fx = onTable ? T.x : steam ? S.x : C.x, fz = onTable ? T.z : steam ? S.z : C.z;
+      p.set(fx + Math.cos(ang) * 2.4 - 0.6, onTable ? 2.3 : 1.7, fz + Math.sin(ang) * 2.4 + 0.4);
+      a.set(fx, onTable ? 0.9 : 0.95, fz);
+    },
+    end() {
+      spa.work(false);
+      me.root.rotation.set(0, back.h, 0); me.lookX = 0; setAction(me, 'idle');
+      walker.pos.set(back.x, 0, back.z); me.root.position.copy(walker.pos);
+      const t = state.t;
+      const fx = k === 'spa_full' ? ['spa_champi', 'spa_shoulder', 'spa_feet', 'spa_steam', 'spa_facial'] : [k];
+      const got = [];
+      for (const f of fx) {
+        if (f === 'spa_champi') { state.hp = Math.min(100, state.hp + 30); got.push('🧠 dimaag thanda'); }
+        if (f === 'spa_shoulder') { state.hp = Math.min(100, state.hp + 50); state.turboUntil = Math.max(state.turboUntil, t + 45); got.push('💪 akdan gayab'); }
+        if (f === 'spa_feet') { state.turboUntil = Math.max(state.turboUntil, t + 90); got.push('🦶 90 sec tez'); }
+        if (f === 'spa_steam') { state.hp = 100; lastHurt = -99; got.push('♨️ health full'); }
+        if (f === 'spa_facial') { state.facialAt = t; for (const g of npcs.girls()) g.girl.affinity += 0.05; got.push('✨ chehra chamka — ladkiyon ki pasand ⬆️'); }
+      }
+      flash('sugar');
+      toast(`🌿 ${it.n} ho gaya! ${got.join(' • ')}`, 3400);
+    },
+  };
+}
+
+// ---------- 🪩 CLUB: andar aate hi party gaana (na mile to apni beat), bahar jaate hi band ----------
+let club = null, clubIn = false, clubOurs = false, clubBeatStop = null;
+function clubMusic() {
+  const now = club.inside && state.mode === 'foot';
+  if (now === clubIn) return;
+  clubIn = now;
+  if (now) {
+    toast('🪩 CLUB MIRCHI — DJ Night! Q dabao aur naacho 💃🕺', 3000);
+    if (!music.playing) {
+      clubOurs = true;
+      musicUI.autoPlay(pick(['bollywood party', 'bollywood remix', 'punjabi party songs', 'bhojpuri dj'])).then(() => { if (!clubIn) stopSceneMusic(); });
+      setTimeout(() => { if (clubIn && !music.playing && !clubBeatStop) clubBeatStop = playClubBeat(music.ctxReady()); }, 2500);
+    }
+  } else {
+    if (clubOurs) { stopSceneMusic(); clubOurs = false; }
+    if (clubBeatStop) { clubBeatStop(); clubBeatStop = null; }
+  }
+  if (clubBeatStop && music.playing) { clubBeatStop(); clubBeatStop = null; } // asli gaana mila → apni beat band
+}
+
 // ---------- 🗣️ MOHALLE KI CHAHAL-PAHAL — aas-paas ke log apne aap bolte hain ----------
 let ambT = 6;
 function ambientTalk(t) {
   if (t < ambT) return;
-  ambT = t + 7 + Math.random() * 8;
+  ambT = t + 11 + Math.random() * 10;
+  if (state.open) return; // kisi se baat chal rahi hai — beech mein koi na bole
   const p = state.mode === 'drive' ? car.pos : walker.pos;
-  const near = npcs.npcs.filter((n) => n.type === 'walker' && !n.cop && !n.goon && !(n.fall > 0) && !n.talking && n.h.root.visible && Math.hypot(n.x - p.x, n.z - p.z) < 13);
+  const near = npcs.npcs.filter((n) => n.type === 'walker' && !n.cop && !n.goon && !(n.fall > 0) && !n.talking && n.h.root.visible && Math.hypot(n.x - p.x, n.z - p.z) < 9);
   if (!near.length) return;
   const n = pick(near), fem = !!n.h.spec.female;
   const hr = state.tod * 24;
@@ -1577,7 +1784,7 @@ function ambientTalk(t) {
   const fast = state.mode === 'drive' && Math.abs(car.speed) > 12;
   const sit = fast ? 'paas se koi bahut tez gaadi chala ke nikla, us pe comment/gussa'
     : state.mode === 'drive' ? 'paas mein gaadi khadi hai, uske driver ko dekh ke kuch bolna (sawari, kiraya, mazaak)'
-      : pick(['mohalle ki gossip apne aap se ya saath wale se', `${when} ka mausam/mehngai/bijli-paani pe shikayat`, 'player ko dekh ke taana ya mazaak', 'ghar ki koi baat (biwi/maa/bachche/rishtedaar)', 'cricket, film ya neta pe raay']);
+      : pick(['paas se guzarte player (mohalle ka jaana-pehchaana ladka) ko haal-chaal / namaste / halka mazaak', 'saath chalte dost se chhoti si baat (kaam, ghar, mehngai)', `${when} ke mausam ya bijli-paani pe ek chhoti si baat, player se`, 'kisi ko awaaz de raha/rahi hai (bachcha, dost, dukaandaar)', 'player se cricket ya nayi film pe ek line']) + '. Ek hi chhota, saaf, poora vaakya (max 60 characters) jo raah chalta insaan sach mein zor se bolta hai — apne aap se badbadaana ya adhoori/ajeeb baat nahi.';
   const line = aiLine(`amb:${fem ? 'f' : 'm'}:${fast ? 'fast' : state.mode}:${L()}:${state.level}`, { who: fem ? 'mohalle ki aurat' : 'mohalle ka aadmi', role: fem ? 'aam gharelu aurat / ladki' : 'aam aadmi (dukaan, naukri, bekaar ghoomne wala)', situation: `${when} ka waqt. ${sit}`, lang: L(), spicy: state.level === 2 }, null);
   const say = line || (fast ? null : pick(EXTRA[L()][fem ? 'ambF' : 'ambM'])); // AI na ho to bade bhandaar se (dohraav nahi)
   if (!say) return;
@@ -2378,11 +2585,13 @@ function updateCamera(dt, lv) {
     let d = state.seq?.type === 'salon' ? 3.2 : footDist;
     const by = groundY();
     // deewar ke andar camera na jaaye
-    for (let k = 0; k < 8 && !state.onRoof; k++) {
+    // camera aur player ke beech koi deewar na ho (pehle sirf camera ki jagah dekhte the → chhote kamre mein deewar ke paar chala jaata tha)
+    const clear = (cx, cz) => { for (let i = 1; i <= 6; i++) { const f = i / 6; if (solidAt(walker.pos.x + (cx - walker.pos.x) * f, walker.pos.z + (cz - walker.pos.z) * f, 0.18)) return false; } return true; };
+    for (let k = 0; k < 10 && !state.onRoof; k++) {
       const cx = walker.pos.x + Math.sin(footYaw) * d, cz = walker.pos.z + Math.cos(footYaw) * d;
-      if (!solidAt(cx, cz, 0.3) && (inFoot(cx, cz) || d < 1.6)) break;
-      if (d <= 1.2) break;
-      d = Math.max(1.2, d - 0.6);
+      if (!solidAt(cx, cz, 0.3) && (inFoot(cx, cz) || d < 1.6) && clear(cx, cz)) break;
+      if (d <= 0.9) break;
+      d = Math.max(0.9, d - 0.5);
     }
     camTarget.set(walker.pos.x + Math.sin(footYaw) * d, by + 1.75 + d * 0.22, walker.pos.z + Math.cos(footYaw) * d);
     tmp.set(walker.pos.x, by + 1.45, walker.pos.z);
@@ -2669,6 +2878,8 @@ function tick() {
   renderer.toneMappingExposure = 1.08 - env.day * 0.2;
 
   hotel.update(t, dt, lv, { night: env.night, party });
+  if (club) { club.update(dt, t, state.mode === 'drive' ? car.pos : walker.pos, camera.position); clubMusic(); }
+  if (spa) { spa.update(dt, t, state.mode === 'drive' ? car.pos : walker.pos, camera.position); spaMusic(); }
   if (station.update(t, dt, active.pos) === 'horn') { glide(220, 210, 1.4, 'sawtooth', 0.05); glide(330, 320, 1.4, 'sawtooth', 0.03); toast('🚂 Chhuk chhuk! Train aa rahi hai', 2000); }
   if (started) { missions.update(dt, t); story.update(dt, t); weapons.update(dt); }
   if (started && t - lastHurt > 6 && state.hp < 100) { state.hp = Math.min(100, state.hp + dt * 5); }
@@ -2742,35 +2953,51 @@ function kissScene(gf) {
   const open = (sgn) => { const cx = x + Math.cos(h) * sgn * 2, cz = z - Math.sin(h) * sgn * 2; return !solidAt(cx, cz, 0.35) && (inFoot(cx, cz) || driveable(cx, cz)); };
   const side = open(1) ? 1 : open(-1) ? -1 : 1;
   const rx = Math.cos(h) * side, rz = -Math.sin(h) * side;
+  const KISS_AT = 8.6, KISS_END = 12.4;
   return {
-    dur: 7, lines: ROMANCE_TXT[L()].kiss, kissed: false,
+    // pehle baat (Claude), phir chup — honth se honth 💋
+    dur: 13, lines: ['', '', ''], kissed: false,
+    talk: { scene: 'aamne-saamne khade hain, bilkul paas; is baat ke baad dono pehli baar honth se honth kiss karenge (kiss se pehle ki 2 line)', slots: [0, 1], order: ['hero', 'heroine'], gf, fallback: SCN.kiss },
     setup() {
       nightify();
       gf.scene = true;
-      placeHuman(me, x, z, h, 'hug', y);
-      placeHuman(gf.h, x + fx * 0.44, z + fz * 0.44, h + Math.PI, 'hug', y);
+      placeHuman(me, x, z, h, 'idle', y);
+      placeHuman(gf.h, x + fx * 0.6, z + fz * 0.6, h + Math.PI, 'idle', y);
       gf.girl.affinity += 0.15;
     },
     update(T) {
-      const k = Math.min(1, Math.max(0, (T - 2) / 1.6)); // dheere se paas
-      me.lookX = -0.16 * k; gf.h.lookX = 0.12 * k; // wo neeche, woh upar dekhe
-      me.look = -0.3 * k; gf.h.look = -0.3 * k;  // sir halka tircha
-      gf.h.root.position.set(x + fx * (0.44 - 0.08 * k), y, z + fz * (0.44 - 0.08 * k));
-      if (T > 3.6 && !state.scene.kissed) {
+      // 0 → 1: dheere paas aao, sar tircha (ulti taraf), aankhen ek-doosre pe
+      const k = sm(KISS_AT - 1.6, KISS_AT, T) * (1 - sm(KISS_END, KISS_END + 0.5, T));
+      const d = 0.62 - 0.24 * k; // 0.62m → 0.38m: pair door, aage jhuk ke sirf chehre milein
+      gf.h.root.position.set(x + fx * d, y, z + fz * d);
+      setAction(gf.h, k > 0.2 ? 'hug' : 'idle');
+      // hero ke haath neeche (3D model pe 'hug' mudra haath upar utha deti hai); heroine baahein daale
+      me.look = 0.1 * k; gf.h.look = 0.1 * k; // halka sa ulti taraf → naak na takraaye, chehre aamne-saamne rahein
+      // heroine thodi lambi hai: wo sar neeche jhukaaye, hero halka upar (lookX + = upar)
+      me.lookX = 0.14 * k; gf.h.lookX = -0.2 * k;
+      me.root.rotation.x = -0.1 * k; gf.h.root.rotation.x = -0.12 * k; // dono aage jhukein (honth tak)
+      if (T > KISS_AT && !state.scene.kissed) {
         state.scene.kissed = true;
-        flash('love');
-        glide(1200, 1800, 0.25, 'sine', 0.05); glide(1600, 2200, 0.2, 'sine', 0.04, 0.12);
-        ui3d.bubble(gf.h.root, '😘💕', 'love', 2.5);
-        for (let i = 0; i < 6; i++) puff(x + fx * 0.22, 1.95 + Math.random() * 0.3, z + fz * 0.22, { color: 0xff4f9b, size: 0.14, life: 1.2, up: 0.8, spread: 0.6, fire: true });
+        glide(1200, 1600, 0.3, 'sine', 0.03);
+        for (let i = 0; i < 5; i++) puff(x + fx * 0.14, y + 1.9 + Math.random() * 0.3, z + fz * 0.14, { color: 0xff4f9b, size: 0.1, life: 1.4, up: 0.6, spread: 0.5, fire: true });
       }
     },
     cam(T, p, a) {
-      const side = 2.1 - Math.min(0.7, T * 0.12);
-      p.set(x + rx * side + fx * 0.22, y + 1.72, z + rz * side + fz * 0.22);
-      a.set(x + fx * 0.22, y + 1.62, z + fz * 0.22);
+      // baat ke waqt halka sa kandhe ke upar se; kiss pe bilkul side profile, close
+      // dono ki ASLI jagah se: beech ka point, unki line ke bagal mein; baat pe hero ke peeche se, kiss pe heroine ki taraf se 3/4
+      const kiss = sm(KISS_AT - 1.8, KISS_AT, T);
+      const mp = me.root.position, gp = gf.h.root.position;
+      let ax = gp.x - mp.x, az = gp.z - mp.z;
+      const al = Math.hypot(ax, az) || 1; ax /= al; az /= al;
+      const sx = az * side, sz = -ax * side; // bagal (khuli taraf)
+      const mx = (mp.x + gp.x) / 2, mz = (mp.z + gp.z) / 2;
+      // kiss pe bilkul side profile (filmon jaisa) — dono chehre aamne-saamne dikhein
+      const dist = 2.0 - 0.95 * kiss, along = -0.6 * (1 - kiss);
+      p.set(mx + sx * dist + ax * along, y + 1.62 - 0.06 * kiss, mz + sz * dist + az * along);
+      a.set(mx, y + 1.56, mz);
     },
     end() {
-      gf.scene = false; me.lookX = 0; me.look = 0; gf.h.lookX = 0; gf.h.look = 0;
+      gf.scene = false; me.lookX = 0; me.look = 0; gf.h.lookX = 0; gf.h.look = 0; me.root.rotation.x = 0; gf.h.root.rotation.x = 0;
       gf.x = x + rx * 0.9; gf.z = z + rz * 0.9; setAction(me, 'idle');
     },
   };
@@ -2825,7 +3052,8 @@ function buildRoom() {
 function roomScene(gf) {
   const R = buildRoom(), O = R.O;
   const T_ = ROMANCE_TXT[L()];
-  const lines = gf ? T_.room : T_.solo;
+  // gf ho to narration nahi — dono ki baat (Claude); akele ho to purani lines
+  const lines = gf ? Array(8).fill('') : T_.solo;
   const D = gf ? { dance: 7, dim: 9, sleep: 19.5, dur: 24 } : { dance: 0, dim: 1.5, sleep: 10, dur: 13 };
   // lete hue: sir -z (takiye) ki taraf, mooh upar
   const lie = (h, x, look) => { h.root.position.set(O.x + x, O.y + 0.74, O.z - 1.95); h.root.rotation.set(Math.PI / 2, Math.PI, 0); setAction(h, 'sleep'); h.look = look; h.lookX = 0; };
@@ -2833,6 +3061,7 @@ function roomScene(gf) {
   let slept = false;
   return {
     dur: D.dur, lines,
+    talk: gf ? { scene: 'hotel ke kamre mein dono slow dance kar rahe hain, phir batti bujh ke so jaate hain; aakhri line subah uthne pe', slots: [0, 1, 2, 7], order: ['hero', 'heroine', 'hero', 'heroine'], gf, fallback: SCN.room } : null,
     setup() {
       R.g.visible = true;
       state.realTime = false; state.tod = 22.5 / 24; state.romance = !!gf;
@@ -2882,7 +3111,7 @@ function roomScene(gf) {
         if (Math.floor(T * 0.7) !== Math.floor((T - dt) * 0.7)) ui3d.bubble(me.root, '💤', '', 1.4);
       }
       if (T > D.sleep && !state.scene.chirp) { state.scene.chirp = true; for (let i = 0; i < 4; i++) glide(2600 + i * 200, 3200, 0.12, 'sine', 0.03, i * 0.25); }
-      if (T > D.sleep + 1.6 && gf && !state.scene.up) { state.scene.up = true; gf.h.look = 0.2; ui3d.bubble(gf.h.root, 'Good morning jaanu ☀️😘', 'love', 3); }
+      if (T > D.sleep + 1.6 && gf && !state.scene.up) { state.scene.up = true; gf.h.look = 0.2; ui3d.bubble(gf.h.root, 'Good morning jaanu ☀️😘', 'love', 3, null, girlVo(gf)); }
     },
     cam(T, p, a) {
       if (gf && T < D.dance) { const ang = T * 0.4; p.set(O.x + Math.cos(ang) * 2.8, O.y + 1.6, O.z + 1.3 + Math.sin(ang) * 2.8); a.set(O.x, O.y + 1.2, O.z + 1.3); return; }
@@ -3021,6 +3250,8 @@ async function boot() {
   hotel = buildHotel(scene, { triggers: world.triggers, keepers: world.keepers });
   buildHighway(scene, { tree: places.tree, triggers: world.triggers, keepers: world.keepers, defs: { hdhaba: HDHABA } });
   districts = buildDistricts(scene, { triggers: world.triggers, keepers: world.keepers, isTouch });
+  club = buildClub(scene); // 🪩 andar ja sakte ho
+  spa = buildSpa(scene, { triggers: world.triggers, keepers: world.keepers }); // 🌿 andar ja sakte ho
   KALLU.keeper = { outfit: 'jacket', top: 0x111111, bottom: 0x222222, shades: true, stache: true, buff: 1, hat: 'cap', capColor: 0x111111 };
   { const k = { id: 'kallu', def: KALLU, x: -123.4, z: 151, heading: -Math.PI / 2, stall: true }; world.keepers.push(k); world.triggers.push({ def: KALLU, x: -121.2, z: 151, heading: Math.PI / 2, r: 3.2, foot: true, keeper: k, front: { x: -116, z: 141 } }); }
   npcs = buildNPCs(scene, { world, places2, isTouch });
@@ -3078,7 +3309,7 @@ async function boot() {
   setRetro(false);
   $('btnRetro').classList.add('on');
   $('btnRetro').textContent = '🎬';
-  if (location.search.includes('debug')) window.__m = { state, npcs, walker, get car() { return car; }, openGirl, startKiss, voiceInfo, toggleRide, teleport, openShop, world, interact, get traffic() { return traffic; }, attack, jump, openMusic, music, musicUI, get missions() { return missions; }, get ui3d() { return ui3d; }, get weapons() { return weapons; }, get story() { return story; }, toggleLift, startAim, stopAim, shoot, setAim: (y, p) => { aimYaw = y; aimPitch = p; }, buy: (id, n) => { const tr = world.triggers.find((t) => t.def.id === id); openShop(tr.def, tr); [...document.querySelectorAll('#shopItems .opt')].find((b) => b.textContent.includes(n)).click(); } };
+  if (location.search.includes('debug')) window.__m = { state, npcs, walker, get car() { return car; }, openGirl, startKiss, voiceInfo, runScene, kissScene, get club() { return club; }, toggleRide, teleport, openShop, world, interact, get traffic() { return traffic; }, attack, jump, openMusic, music, musicUI, get missions() { return missions; }, get ui3d() { return ui3d; }, get weapons() { return weapons; }, get story() { return story; }, toggleLift, startAim, stopAim, shoot, setAim: (y, p) => { aimYaw = y; aimPitch = p; }, buy: (id, n) => { const tr = world.triggers.find((t) => t.def.id === id); openShop(tr.def, tr); [...document.querySelectorAll('#shopItems .opt')].find((b) => b.textContent.includes(n)).click(); } };
   $('money').textContent = state.money;
   updateLivesHud();
   // ☁️ Firebase — background mein; fail ho to game offline chalta hai

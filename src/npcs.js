@@ -514,7 +514,7 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
             }
             break;
           }
-          if (n.slapT > 0) { n.slapT -= dt; if (d0(n) > 0.95 && pl.mode === 'foot') moveToward(n, px, pz, 4.5, dt); n.heading = headingTo(px - n.x, pz - n.z); break; }
+          if (n.slapT > 0) { n.slapT -= dt; if (d0(n) > 0.72 && pl.mode === 'foot') moveToward(n, px, pz, 4.5, dt); n.heading = headingTo(px - n.x, pz - n.z); break; } // 0.72m: haath gaal tak pahunche
           if (n.talking) { n.heading += wrap(headingTo(px - n.x, pz - n.z) - n.heading) * Math.min(1, dt * 6); if (n.h.action !== 'slap') setAction(n.h, 'talk'); break; }
           const nearP = Math.hypot(n.x - px, n.z - pz);
           if (ctx.party && n.canDance && nearP < 26 && !n.cop) { setAction(n.h, 'dance'); lookAtPlayer(n, px, pz, 20); break; }

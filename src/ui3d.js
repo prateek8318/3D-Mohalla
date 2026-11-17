@@ -9,7 +9,7 @@ export function createUI3D(camera) {
   const labels = new Map();
 
   /** speaker = jo asal mein bol raha hai (jaise gaadi ke andar ki sawari) — uski aawaz/gender */
-  function bubble(target, text, cls = '', dur = 3, speaker = null) {
+  function bubble(target, text, cls = '', dur = 3, speaker = null, vo = null) {
     const el = document.createElement('div');
     el.className = 'bubble ' + cls;
     el.textContent = text;
@@ -20,11 +20,15 @@ export function createUI3D(camera) {
     bubbles.push(b);
     if (bubbles.length > 7) bubbles[0].until = 0;
     // 🗣️ paas wala bole to aawaz bhi (door wale chup — warna shor)
+    // vo = { priority, queue, female, who } — baat-cheet wali line (poori aawaz, koi kaate nahi)
     const wp = target.isObject3D ? target.getWorldPosition(new THREE.Vector3()) : target;
-    if (speaker !== false && wp && Math.hypot(wp.x - camera.position.x, (wp.z ?? 0) - camera.position.z) < 28) { // speaker=false → chup (jaise player ka apna likha)
+    const d = wp ? Math.hypot(wp.x - camera.position.x, (wp.z ?? 0) - camera.position.z) : 99;
+    if (speaker !== false && (vo?.priority ? d < 40 : d < 18)) { // speaker=false → chup
       const sp = speaker || target;
       const ud = sp.isObject3D ? (sp.userData.female !== undefined ? sp.userData : sp.children.find((c) => c.userData?.female !== undefined)?.userData) : null;
-      speak(text, { female: !!ud?.female, who: sp.uuid || sp.who, loud: /loud/.test(cls) });
+      // door wala dheeme sunai de, paas wala saaf
+      const vol = vo?.priority ? 1 : Math.max(0.35, Math.min(1, 1 - (d - 5) / 20));
+      speak(text, { female: !!ud?.female, who: sp.uuid || sp.who, loud: /loud/.test(cls), vol, ...vo });
     }
   }
 

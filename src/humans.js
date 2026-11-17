@@ -591,7 +591,8 @@ function pose(h, t, dt) {
       break;
     case 'slap': {
       const k = clamp01(h.at / 0.32);
-      T.aRz = 1.5 - 1.9 * k; T.aRx = 0.5 + 0.9 * k; T.eR = 0.35; T.sy = 0.4 - 0.9 * k; T.hry = 0.15 - 0.3 * k;
+      // haath peeche se ghoom ke saamne wale ke GAAL tak (kandhe ki oonchai), kamar ka zor saath mein
+      T.aRz = 1.7 - 2.1 * k; T.aRx = 0.7 + 0.85 * k; T.eR = 0.25 - 0.1 * k; T.sy = 0.5 - 1.0 * k; T.hry = 0.2 - 0.4 * k; T.sx = -0.06;
       rate = 40;
       break;
     }
@@ -631,6 +632,43 @@ function pose(h, t, dt) {
       break;
     case 'dance': {
       const b = t * 6.5 + ph, sb = Math.sin(b);
+      // 💃 alag-alag style (h.danceStyle) — club mein sab ek jaisa na naachein
+      const st = h.danceStyle || 0;
+      if (st === 1) { // kamar matkana (hip sway), haath upar dheere lehraate
+        const w = t * 3.2 + ph, s1 = Math.sin(w), c1 = Math.cos(w);
+        T.hpx = 0.09 * s1; T.hrz = 0.14 * s1; T.hry = 0.12 * c1; T.sz = -0.1 * s1; T.sy = -0.1 * c1;
+        T.aLz = -2.5 + 0.25 * c1; T.aRz = 2.5 + 0.25 * c1; T.aLx = T.aRx = 0.2; T.eL = 0.9 + 0.3 * s1; T.eR = 0.9 - 0.3 * s1;
+        T.lL = 0.12 * Math.max(0, s1); T.lR = 0.12 * Math.max(0, -s1); T.kL = -0.25 - 0.2 * Math.max(0, s1); T.kR = -0.25 - 0.2 * Math.max(0, -s1);
+        T.hy = 0.9 + 0.02 * Math.sin(w * 2); T.hdx = 0.08; T.hdy += 0.15 * c1;
+        flatFeet(T); rate = 12; break;
+      }
+      if (st === 2) { // bhangra: kandhe uchhaal, ghutna upar
+        const w = t * 7 + ph, s1 = Math.sin(w), up = Math.max(0, Math.sin(w * 0.5));
+        T.aLz = -2.6; T.aRz = 2.6; T.eL = T.eR = 0.3 + 0.25 * Math.abs(s1); T.sx = -0.05; T.sy = 0.12 * s1;
+        T.lL = 1.1 * up; T.kL = -1.3 * up; T.lR = 0.1; T.kR = -0.2;
+        T.hy = 0.92 + 0.05 * Math.abs(s1); T.hdx = -0.1 + 0.08 * s1;
+        T.fL = -0.3 * up; rate = 22; break;
+      }
+      if (st === 3) { // club bounce: mutthi upar-neeche, sar hilaana
+        const w = t * 8 + ph, s1 = Math.sin(w), beat = Math.abs(Math.sin(w * 0.5));
+        T.aRz = 1.6 + 0.9 * beat; T.aRx = 0.6; T.eR = 1.6 - 0.8 * beat; T.aLz = -0.5; T.aLx = 0.7; T.eL = 1.6;
+        T.kL = T.kR = -0.35 - 0.3 * beat; T.lL = T.lR = 0.25 + 0.2 * beat; T.hy = 0.88 - 0.05 * beat;
+        T.hdx = 0.25 * beat; T.sy = 0.1 * s1; T.hry = -0.08 * s1;
+        flatFeet(T); rate = 24; break;
+      }
+      if (st === 4) { // twist: kamar ghumaao, haath bagal mein
+        const w = t * 6 + ph, s1 = Math.sin(w);
+        T.hry = 0.45 * s1; T.sy = -0.5 * s1; T.aLz = -1.3; T.aRz = 1.3; T.aLx = T.aRx = 0.4; T.eL = T.eR = 1.2;
+        T.kL = T.kR = -0.6; T.lL = T.lR = 0.45; T.hy = 0.82 + 0.03 * Math.cos(w * 2); T.fL = T.fR = 0.2;
+        rate = 18; break;
+      }
+      if (st === 5) { // body roll — dheema, lehrata (slow sexy)
+        const w = t * 2.6 + ph, s1 = Math.sin(w), c1 = Math.cos(w);
+        T.sx = 0.18 * s1; T.hdx = -0.2 * s1; T.hpx = 0.07 * c1; T.hrz = 0.1 * c1; T.hry = 0.08 * s1;
+        T.aLz = -2.8 + 0.2 * s1; T.aRz = 2.2 + 0.4 * c1; T.aLx = 0.3; T.aRx = 0.5 + 0.3 * s1; T.eL = 1.4; T.eR = 0.8 + 0.5 * s1;
+        T.kL = -0.3 - 0.15 * s1; T.kR = -0.3 + 0.15 * s1; T.lL = 0.15 + 0.08 * s1; T.lR = 0.15 - 0.08 * s1; T.hy = 0.89 + 0.02 * c1;
+        flatFeet(T); rate = 10; break;
+      }
       T.sz = 0.18 * sb; T.sy = 0.15 * Math.sin(b * 0.5); T.hry = -0.2 * Math.sin(b * 0.5); T.hpx = 0.06 * sb; T.hrz = -0.08 * sb;
       T.aLz = -2.2 + 0.5 * sb; T.aRz = 2.2 + 0.5 * sb; T.eL = 0.5 + 0.4 * sb; T.eR = 0.5 - 0.4 * sb;
       T.lL = 0.25 * Math.max(0, sb); T.lR = 0.25 * Math.max(0, -sb); T.kL = -0.5 * Math.max(0, sb); T.kR = -0.5 * Math.max(0, -sb);

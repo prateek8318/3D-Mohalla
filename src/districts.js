@@ -266,7 +266,7 @@ export function buildDistricts(scene, { triggers, keepers, isTouch }) {
   }
 
   // ===== 🏙️ CYBER CITY (purab) =====
-  const towerSkip = [[300, 20, 26], [230, -18, 22], [370, -22, 26]]; // mall, cafe, hospital
+  const towerSkip = [[300, 20, 26], [230, -18, 22], [370, -22, 26], [218, 70, 18], [218, 118, 12]]; // mall, cafe, hospital, 🪩 club, 🌿 spa
   function tower(x, z, w, d, h, block = true) {
     bldg.push({ x, z, sx: w, sz: d, h, kind: 'tech', v: Math.floor(R() * 3), c: R() });
     if (block) addBox(x, z, w + 1, d + 1);
@@ -535,7 +535,7 @@ export function buildDistricts(scene, { triggers, keepers, isTouch }) {
     ],
     dests: [
       ['🛕 Rampur Mandir', -300, 4], ['🌾 Gaon Chaupal', -250, 4], ['☕ Cyber Cafe', 230, -4], ['🛍️ Neon Mall', 300, 4],
-      ['🏥 City Hospital', HOSPITAL.x, -4], ['🕌 Jama Masjid', 0, zN - 4], ['🍢 Kabab Corner', -44, zN - 4], ['🌊 Riverfront', 200, zS + 4],
+      ['🏥 City Hospital', HOSPITAL.x, -4], ['🪩 Club Mirchi', 200, 70], ['🌿 Mohalla Spa', 200, 118], ['🕌 Jama Masjid', 0, zN - 4], ['🍢 Kabab Corner', -44, zN - 4], ['🌊 Riverfront', 200, zS + 4],
     ],
     icons: [
       { x: -300, z: 24, a: '🛕', big: true }, { x: 0, z: 615, a: '🕌', big: true }, { x: 300, z: 30, a: '🛍️', big: true },

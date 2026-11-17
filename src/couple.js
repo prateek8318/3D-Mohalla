@@ -93,15 +93,16 @@ export function buildCouple(scene) {
     stems[1].rotation.z = 0.11 * f;
   }
   function placeHero() {
-    // kareeb aao, ek-doosre ki taraf mudo, sar jhukao
-    man.root.position.set(C.x - 0.4 + 0.15 * K, SEAT_Y, C.z);
-    woman.root.position.set(C.x + 0.4 - 0.15 * K, SEAT_Y, C.z);
-    man.root.rotation.y = -0.55 * K;
-    woman.root.rotation.y = 0.55 * K;
-    man.root.rotation.z = -0.1 * LEAN;
-    woman.root.rotation.z = 0.12 * K + 0.16 * LEAN;
-    man.look = -0.6 * K;
-    woman.look = 0.6 * K;
+    // K: kareeb aao + ek-doosre ki taraf mudo; LEAN: 💋 kiss — aur paas, poora aamne-saamne, sar ulti taraf tircha
+    man.root.position.set(C.x - 0.4 + 0.2 * K + 0.07 * LEAN, SEAT_Y, C.z);
+    woman.root.position.set(C.x + 0.4 - 0.2 * K - 0.07 * LEAN, SEAT_Y, C.z);
+    man.root.rotation.y = -0.7 * K - 0.35 * LEAN;
+    woman.root.rotation.y = 0.7 * K + 0.35 * LEAN;
+    man.root.rotation.z = -0.1 * LEAN; // ek-doosre ki taraf jhuko
+    woman.root.rotation.z = 0.12 * LEAN;
+    man.look = -0.45 * K - 0.15 * LEAN;
+    woman.look = 0.45 * K + 0.15 * LEAN;
+    man.lookX = -0.12 * LEAN; woman.lookX = 0.1 * LEAN; // wo thoda neeche, wo thoda upar
   }
   placeHero();
 

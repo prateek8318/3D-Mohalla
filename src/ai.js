@@ -73,12 +73,12 @@ export async function aiFresh(req, timeout = 5000) {
  * 💬 Seedhi baat-cheet: player ka text → kirdaar ka jawab { reply, mood, affinity, action }.
  * Na mile (key nahi / offline / time out) to null — tab game apna chhota jawab deta hai.
  */
-export async function aiChat(payload, timeout = 9000) {
+export async function aiChat(payload, timeout = 12000, mode = 'chat') {
   if (down && Date.now() < downUntil) return null;
   const ctl = new AbortController();
   const tm = setTimeout(() => ctl.abort(), timeout);
   try {
-    const r = await fetch(URL_, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, mode: 'chat' }), signal: ctl.signal });
+    const r = await fetch(URL_, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, mode }), signal: ctl.signal });
     const ct = r.headers.get('content-type') || '';
     if (!r.ok || !ct.includes('json')) {
       if (r.status === 503 || r.status === 404 || !ct.includes('json')) { down = true; downUntil = Date.now() + 10 * 60000; }
@@ -88,6 +88,21 @@ export async function aiChat(payload, timeout = 9000) {
     if (typeof j.reply !== 'string' || !j.reply.trim()) return null;
     if (j.hindi) registerHindi(j.reply, j.hindi);
     return j;
+  } catch { return null; } finally { clearTimeout(tm); }
+}
+
+/** 🎬 romantic scene ki aapas ki baat-cheet: [{ who: 'hero'|'heroine', text }] ya null */
+export async function aiScene(payload, timeout = 6000) {
+  if (down && Date.now() < downUntil) return null;
+  const ctl = new AbortController();
+  const tm = setTimeout(() => ctl.abort(), timeout);
+  try {
+    const r = await fetch(URL_, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, mode: 'scene' }), signal: ctl.signal });
+    if (!r.ok || !(r.headers.get('content-type') || '').includes('json')) return null;
+    const j = await r.json();
+    if (!Array.isArray(j.lines)) return null;
+    for (const l of j.lines) if (l?.hindi) registerHindi(l.text, l.hindi);
+    return j.lines.filter((l) => l?.text);
   } catch { return null; } finally { clearTimeout(tm); }
 }
 

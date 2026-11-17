@@ -1,10 +1,10 @@
 import { DRIVE, FOOT, BOXES, CIRCLES, PARK, GALI, THANA } from './collide.js';
 import { HOTEL_AREA } from './hotel.js';
 
-const W0 = -310, W1 = 310, Z0 = -135, Z1 = 480, PX = 1.6; // px per meter
+const W0 = -450, W1 = 450, Z0 = -135, Z1 = 665, PX = 1.6; // px per meter (ring road tak)
 
 /** GTA jaisa chhota naksha */
-export function buildMinimap(el, { triggers }) {
+export function buildMinimap(el, { triggers, zones = {}, extraIcons = [] }) {
   const bg = document.createElement('canvas');
   bg.width = (W1 - W0) * PX; bg.height = (Z1 - Z0) * PX;
   const g = bg.getContext('2d');
@@ -12,6 +12,7 @@ export function buildMinimap(el, { triggers }) {
   g.fillStyle = '#1d1726'; g.fillRect(0, 0, bg.width, bg.height);
   g.fillStyle = '#1b3a6a'; g.fillRect(0, (-123 - Z0) * PX, bg.width, (-Z0 - 123) * PX + 10);
   FOOT.forEach((r) => R(r, '#6b5f58'));
+  for (const [k, r] of Object.entries(zones)) R(r, k.startsWith('gaon') || k === 'oldNW' ? '#4a5a2c' : k.startsWith('tech') || k === 'oldNE' ? '#2a3550' : '#6a4f40');
   R(PARK, '#3f6a2c');
   R(GALI, '#9a7a4a');
   R(THANA, '#4a5a7a');
@@ -27,7 +28,7 @@ export function buildMinimap(el, { triggers }) {
   let big = false;
   el.addEventListener('click', () => { big = !big; el.classList.toggle('big', big); });
   const icons = triggers.filter((t) => t.def.avatar).map((t) => ({ x: t.x, z: t.z, a: t.def.avatar, c: t.def.color || '#fff', big: ['mandir', 'masjid', 'ghat', 'hotel'].includes(t.def.id) }));
-  icons.push({ x: 0, z: 456, a: '🚂', big: true }, { x: 75, z: 100, a: '🏨', big: true }, { x: 130, z: 140, a: '🚓', big: true }, { x: -135, z: 141, a: '🏏', big: true }, { x: -50, z: 200, a: '🛍️', big: true });
+  icons.push(...extraIcons, { x: 0, z: 456, a: '🚂', big: true }, { x: 75, z: 100, a: '🏨', big: true }, { x: 130, z: 140, a: '🚓', big: true }, { x: -135, z: 141, a: '🏏', big: true }, { x: -50, z: 200, a: '🛍️', big: true });
 
   const toS = (x, z, cxw, czw, s, w, h) => [w / 2 + (x - cxw) * s, h / 2 + (z - czw) * s];
   return function draw(p, heading, extra) {

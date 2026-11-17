@@ -27,12 +27,13 @@ export function buildPlaces(scene, { CIRCLES, triggers }) {
   const updaters = [];
   let aartiUntil = 0;
 
-  // ================= MANDIR (west end) =================
+  // ================= MANDIR — ab Rampur Gaon mein (pashchim, cross road ke uttar) =================
+  const MP = { x: -300, z: 24 };
   {
     const g = new THREE.Group();
-    g.position.set(-160, 0, 0);
-    addBox(-163, 0, 16, 16);
-    g.rotation.y = Math.PI / 2;
+    g.position.set(MP.x, 0, MP.z);
+    addBox(MP.x, MP.z + 3, 16, 16);
+    g.rotation.y = Math.PI; // mooh sadak (dakshin) ki taraf
     scene.add(g);
     const add = (geo, mat, x, y, z, par = g) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); par.add(m); return m; };
     const stone = M(0xe8d5b0), ochre = M(0xe0782a), ochre2 = M(0xf09a40);
@@ -82,7 +83,7 @@ export function buildPlaces(scene, { CIRCLES, triggers }) {
     const light = new THREE.PointLight(0xff9a3d, 50, 28, 2);
     light.position.set(0, 4, 7);
     g.add(light);
-    triggers.push({ def: MANDIR, x: -148.5, z: 0, heading: Math.PI / 2, r: 6 });
+    triggers.push({ def: MANDIR, x: MP.x, z: MP.z - 11.5, heading: Math.PI, r: 6 });
     let bellSwing = 0;
     updaters.push((t, dt, env) => {
       for (let i = 0; i < fpos.count; i++) {
@@ -92,18 +93,19 @@ export function buildPlaces(scene, { CIRCLES, triggers }) {
       fpos.needsUpdate = true;
       const aarti = t < aartiUntil;
       diyaMat.color.setRGB(3, 1.3, 0.3).multiplyScalar((0.35 + 0.65 * env.night) * (aarti ? 1.8 + Math.sin(t * 20) * 0.4 : 1));
-      light.intensity = (25 + 40 * env.night) * (aarti ? 2.5 : 1);
+      light.intensity = (10 + 22 * env.night) * (aarti ? 1.8 : 1);
       bellSwing *= 1 - Math.min(1, dt * 1.2);
       bells.forEach((b, i) => { b.rotation.x = Math.sin(t * 9 + i) * bellSwing; });
     });
     var ringBells = () => { bellSwing = 0.6; };
   }
 
-  // ================= MASJID (east end) =================
+  // ================= MASJID — ab Purana Shehar mein (uttar, ring road ke kinare) =================
+  const JP = { x: 0, z: 615 };
   {
     const g = new THREE.Group();
-    g.position.set(160, 0, 0);
-    g.rotation.y = -Math.PI / 2;
+    g.position.set(JP.x, 0, JP.z);
+    g.rotation.y = 0; // mooh uttar wali ring road ki taraf
     scene.add(g);
     const add = (geo, mat, x, y, z, par = g) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); par.add(m); return m; };
     const white = M(0xe2dacb), green = M(0x1e8a4a, { roughness: 0.4 }), domeMat = M(0xeaf5ec, { roughness: 0.35 });
@@ -151,12 +153,12 @@ export function buildPlaces(scene, { CIRCLES, triggers }) {
     const light = new THREE.PointLight(0xbfffd0, 45, 28, 2);
     light.position.set(0, 4, 7);
     g.add(light);
-    triggers.push({ def: MASJID, x: 148.5, z: 0, heading: -Math.PI / 2, r: 6 });
-    addBox(165, 0, 18, 32);
+    triggers.push({ def: MASJID, x: JP.x, z: JP.z + 11.5, heading: 0, r: 6 });
+    addBox(JP.x, JP.z - 5, 32, 18);
     updaters.push((t, dt, env) => {
       ringMat.color.setRGB(0.3, 2.4, 0.8).multiplyScalar(0.3 + 0.7 * env.night);
       archMat.color.setRGB(2.2, 1.6, 0.8).multiplyScalar(0.5 + 0.5 * env.night);
-      light.intensity = 20 + 35 * env.night;
+      light.intensity = 8 + 18 * env.night;
     });
   }
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { makeHuman, updateHuman, setAction } from './humans.js';
 import { makeRickshaw } from './rickshaw.js';
-import { BAZAAR_Z } from './collide.js';
+import { BAZAAR_Z, RING, LINK_X } from './collide.js';
 
 const R = Math.random;
 const pick = (a) => a[Math.floor(R() * a.length)];
@@ -59,16 +59,23 @@ function makeAuto() {
 // Raaste: kis axis pe, kahan se kahan (India — baayein chalo)
 const ROUTES = [
   { axis: 'z', at: 0, from: -95, to: 420, w: 8 },
-  { axis: 'x', at: 330, from: -290, to: 290, w: 5 },
-  { axis: 'x', at: 0, from: -145, to: 145, w: 4 },
+  { axis: 'x', at: 330, from: -RING.x + 12, to: RING.x - 12, w: 6 },
+  { axis: 'x', at: 0, from: -RING.x + 12, to: RING.x - 12, w: 6 },
   { axis: 'x', at: BAZAAR_Z, from: -110, to: 112, w: 4 },
+  // 🛣️ ring road + jod-sadkein
+  { axis: 'x', at: RING.zS, from: -RING.x + 12, to: RING.x - 12, w: 4 },
+  { axis: 'x', at: RING.zN, from: -RING.x + 12, to: RING.x - 12, w: 4 },
+  { axis: 'z', at: -RING.x, from: RING.zS + 12, to: RING.zN - 12, w: 4 },
+  { axis: 'z', at: RING.x, from: RING.zS + 12, to: RING.zN - 12, w: 4 },
+  { axis: 'z', at: -LINK_X, from: RING.zS + 12, to: RING.zN - 12, w: 4 },
+  { axis: 'z', at: LINK_X, from: RING.zS + 12, to: RING.zN - 12, w: 4 },
 ];
 const LANE = 4.4;
 const laneOff = (r, s) => (r.at === 0 ? LANE + 2.9 * Math.max(0, 1 - Math.abs(s) / 13) : LANE);
 
 export function buildTraffic(scene, { isTouch }) {
   const vehicles = [];
-  const count = isTouch ? 8 : 15;
+  const count = isTouch ? 14 : 26;
   const totW = ROUTES.reduce((a, r) => a + r.w, 0);
   for (let i = 0; i < count; i++) {
     let k = R() * totW, route = ROUTES[0];
@@ -117,10 +124,27 @@ export function buildTraffic(scene, { isTouch }) {
   }
 
   const tmp = new THREE.Vector3();
+  // bada shehar: door chali gayi gaadi ko chupke se player ke aas-paas le aao (dikhe nahi)
+  function relocate(v, cam) {
+    for (let k = 0; k < 14; k++) {
+      let kk = R() * totW, route = ROUTES[0];
+      for (const r of ROUTES) { if ((kk -= r.w) <= 0) { route = r; break; } }
+      const s = route.from + R() * (route.to - route.from);
+      const x = route.axis === 'z' ? route.at : s, z = route.axis === 'z' ? s : route.at;
+      const d = Math.hypot(x - cam.x, z - cam.z);
+      if (d > 110 && d < 230) {
+        v.route = route; v.s = s; v.dir = R() < 0.5 ? 1 : -1; v.uturn = null; v.speed = v.cruise * 0.5;
+        placeOnRoute(v);
+        if (vehicles.some((o) => o !== v && Math.hypot(o.pos.x - v.pos.x, o.pos.z - v.pos.z) < 8)) continue;
+        return;
+      }
+    }
+  }
   function update(dt, t, ctx) {
     const ev = [];
     for (const v of vehicles) {
       if (v === ctx.playerVeh) continue;
+      if (v.ai && !v.dead && R() < dt * 0.4 && Math.hypot(v.pos.x - ctx.camera.position.x, v.pos.z - ctx.camera.position.z) > 260) relocate(v, ctx.camera.position);
       if (!v.ai) {
         v.speed *= 0.9;
         v.g.position.copy(v.pos);

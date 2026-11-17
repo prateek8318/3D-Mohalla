@@ -104,9 +104,10 @@ export function buildWorld(scene, { isTouch, renderer }) {
   scene.add(moonLight);
 
   // ---------- GROUND / ROADS ----------
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({ color: 0x4a3c30, roughness: 1 }));
+  // zameen nadi ke kinare (z=-123) pe khatam — pehle ye nadi aur ghat ki seedhiyan dhak deti thi
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1200, 860), new THREE.MeshStandardMaterial({ color: 0x4a3c30, roughness: 1 }));
   ground.rotation.x = -Math.PI / 2;
-  ground.position.set(0, -0.02, 60);
+  ground.position.set(0, -0.02, 307);
   ground.receiveShadow = true;
   scene.add(ground);
 
@@ -344,8 +345,7 @@ export function buildWorld(scene, { isTouch, renderer }) {
       }
       addBuilding(-96, (GALI.z0 + GALI.z1) / 2, 12, 20, 14, { x: 1 });
     }
-    // ghat side buildings
-    for (let z = -104; z >= -116; z -= 12) addBuilding(side * 38, z, 14, 11, 10 + R() * 12, { x: -side });
+    // (ghat ke bagal wali imaaratein hata di — ab yahan se nadi-kinare ki ring road jaati hai)
   }
 
   // ---------- STRING LIGHTS (jhalar) ----------
@@ -828,7 +828,7 @@ export function buildWorld(scene, { isTouch, renderer }) {
     scene.add(ch);
   }
   const water = new THREE.Mesh(
-    new THREE.PlaneGeometry(500, 500, 60, 60),
+    new THREE.PlaneGeometry(1400, 500, 90, 40),
     new THREE.MeshStandardMaterial({ color: 0x1a2350, metalness: 0.85, roughness: 0.18, emissive: 0x0a0820 }),
   );
   water.rotation.x = -Math.PI / 2;
@@ -851,7 +851,7 @@ export function buildWorld(scene, { isTouch, renderer }) {
   gsign2.rotation.y = 0;
   gsign2.position.z = -100.4;
   scene.add(gsign2);
-  const ghatLight = new THREE.PointLight(0xff6aa0, 50, 30, 2);
+  const ghatLight = new THREE.PointLight(0xff6aa0, 26, 26, 2);
   ghatLight.position.set(0, 5, -112);
   scene.add(ghatLight);
   triggers.push({ def: GHAT, x: 0, z: -110, heading: 0, r: 7 });
@@ -985,12 +985,13 @@ export function buildWorld(scene, { isTouch, renderer }) {
     }
     for (const l of lightPool) l.intensity = (l.userData.base || 0) * (0.35 + 0.65 * night);
     for (const c of clothes) c.rotation.y = Math.sin(t * 2 + c.position.x * 3) * 0.25;
-    sunLight.intensity = day * 2.6 + env.golden * 0.6;
+    sunLight.intensity = day * 2.15 + env.golden * 0.5;
     moonLight.intensity = 0.8 * night;
     hemi.color.copy(HEMI_N).lerp(HEMI_D, day);
     hemi.groundColor.copy(GND_N).lerp(GND_D, day);
-    hemi.intensity = 0.9 + day * 0.7;
-    amb.intensity = 0.6 + day * 0.2;
+    // din mein sab safed-chamakta na lage
+    hemi.intensity = 0.85 + day * 0.42;
+    amb.intensity = 0.5 + day * 0.08;
     lampHead.color.setRGB(2.2, 1.6, 0.9).multiplyScalar(0.2 + 0.8 * night);
     poolMat.opacity = night;
     diyas.material.color.setRGB(3, 1.4, 0.3).multiplyScalar(0.35 + 0.65 * night);

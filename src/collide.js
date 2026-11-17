@@ -9,6 +9,19 @@ export const BAZAAR_Z = 140;
 export const GALI = { x0: -90, x1: -9, z0: 192, z1: 208 };
 export const PARK = { x0: -152, x1: -118, z0: 116, z1: 164 };
 export const THANA = { x0: 118, x1: 146, z0: 122, z1: 158 };
+// 🛣️ Ring road — kahin sadak khatam nahi hoti. Bahar ka gol chakkar + beech ki jod-sadkein
+export const RING = { x: 430, zN: 640, zS: -109 };
+export const LINK_X = 175; // purab/pashchim ki lambi sadak (river se north ring tak)
+export const ZONES = {
+  gaon: rect(-419.5, -185.5, 10.5, 319.5),       // 🌾 Rampur Gaon (pashchim)
+  gaonS: rect(-419.5, -185.5, -98.5, -10.5),
+  tech: rect(185.5, 419.5, 10.5, 319.5),         // 🏙️ Cyber City (purab)
+  techS: rect(185.5, 419.5, -98.5, -10.5),
+  oldNW: rect(-419.5, -185.5, 340.5, 629.5),
+  oldN: rect(-164.5, 164.5, 470, 629.5),          // 🕌 Purana Shehar (uttar)
+  oldNE: rect(185.5, 419.5, 340.5, 629.5),
+};
+const HW = 8.4, SW = 10.5;
 
 export const DRIVE = [
   rect(-8.4, 8.4, MAIN_Z0, MAIN_Z1),
@@ -20,6 +33,17 @@ export const DRIVE = [
   rect(-HWY_X, HWY_X, STN_RD_Z - 8.4, STN_RD_Z + 8.4),
   rect(211, 229, 338, 346),
   rect(STATION.x0, STATION.x1, STATION.z0, STATION.z1 - 2),
+  // ring road
+  rect(-RING.x - HW, RING.x + HW, RING.zS - HW, RING.zS + HW),
+  rect(-RING.x - HW, RING.x + HW, RING.zN - HW, RING.zN + HW),
+  rect(-RING.x - HW, -RING.x + HW, RING.zS - HW, RING.zN + HW),
+  rect(RING.x - HW, RING.x + HW, RING.zS - HW, RING.zN + HW),
+  // cross road + station road ab ring tak
+  rect(-RING.x, RING.x, -HW, HW),
+  rect(-RING.x, RING.x, STN_RD_Z - HW, STN_RD_Z + HW),
+  // jod-sadkein
+  rect(-LINK_X - HW, -LINK_X + HW, RING.zS - HW, RING.zN + HW),
+  rect(LINK_X - HW, LINK_X + HW, RING.zS - HW, RING.zN + HW),
 ];
 export const FOOT = [
   rect(-10.5, 10.5, MAIN_Z0, MAIN_Z1 + 1),
@@ -35,6 +59,18 @@ export const FOOT = [
   rect(STATION.x0, STATION.x1, STATION.z0, STATION.z1),
   rect(-45, -25, 449, 463), rect(25, 45, 449, 463),
   rect(-60, 60, 461.9, 469.2),
+  // ring road + jod-sadkon ke footpath
+  rect(-RING.x - SW, RING.x + SW, RING.zS - SW, RING.zS + SW),
+  rect(-RING.x - SW, RING.x + SW, RING.zN - SW, RING.zN + SW),
+  rect(-RING.x - SW, -RING.x + SW, RING.zS - SW, RING.zN + SW),
+  rect(RING.x - SW, RING.x + SW, RING.zS - SW, RING.zN + SW),
+  rect(-RING.x, RING.x, -SW, SW),
+  rect(-RING.x, RING.x, STN_RD_Z - SW, STN_RD_Z + SW),
+  rect(-LINK_X - SW, -LINK_X + SW, RING.zS - SW, RING.zN + SW),
+  rect(LINK_X - SW, LINK_X + SW, RING.zS - SW, RING.zN + SW),
+  // naye ilaake — andar ghoom sakte ho (imaaratein khud rokti hain)
+  ...Object.values(ZONES),
+  rect(-24, 24, 600, 632), // masjid ka aangan
 ];
 export const BOXES = [];
 export const CIRCLES = [];

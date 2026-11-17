@@ -7,11 +7,12 @@ const SPOTS = [
   { x: -128, z: 134, h: 0 },        // Gandhi Park
   { x: -140, z: 150, h: Math.PI / 2 },
   // footpath pe — sadak (|x| < 8.4, cross road |z| < 8.4) se bahar
-  { x: 14, z: 9.7, h: Math.PI },        // Chowk kinaare (cross road ka footpath)
-  { x: -9.7, z: 60, h: Math.PI / 2 },   // main road ka footpath
-  { x: 9.7, z: 95, h: -Math.PI / 2 },
-  { x: -14, z: -108, h: 0 },        // Prem Ghat seedhi
-  { x: 14, z: -108, h: 0 },
+  // mooh sadak ki taraf, peeth (backrest) dukaan ki taraf — pehle ulta tha
+  { x: 14, z: 9.7, h: 0 },              // Chowk kinaare (cross road ka footpath)
+  { x: -9.7, z: 60, h: -Math.PI / 2 },  // main road ka footpath
+  { x: 9.7, z: 95, h: Math.PI / 2 },
+  { x: -14, z: -118.4, h: 0 },      // Prem Ghat seedhi (ab ghat ke kinare — beech mein ring road hai)
+  { x: 14, z: -118.4, h: 0 },
   { x: -40, z: 198, h: Math.PI / 2 }, // Bazaar gali
   { x: 20, z: 456, h: Math.PI },    // Station platform
 ];

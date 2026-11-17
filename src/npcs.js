@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { makeHuman, updateHuman, setAction, setOverlay, hold, itemMesh } from './humans.js';
-import { footable, driveable, BAZAAR_Z, THANA } from './collide.js';
+import { footable, driveable, BAZAAR_Z, THANA, RING, LINK_X } from './collide.js';
 import { GIRL_NAMES } from './data2.js';
 
 const R = Math.random;
@@ -16,7 +16,18 @@ const LANES = [
   { a: [-56, 10], b: [-12, 10], w: 1, road: 'z0' }, { a: [12, 10], b: [56, 10], w: 1, road: 'z0' }, { a: [-56, -10], b: [-12, -10], w: 1, road: 'z0' }, { a: [12, -10], b: [56, -10], w: 1, road: 'z0' },
   { a: [-112, BAZAAR_Z - 10.1], b: [112, BAZAAR_Z - 10.1], w: 3, road: 'zb' }, { a: [-112, BAZAAR_Z + 10.1], b: [112, BAZAAR_Z + 10.1], w: 3, road: 'zb' },
   { a: [-86, 198.8], b: [-12, 198.8], w: 4 }, { a: [-86, 201.2], b: [-12, 201.2], w: 4 },
-  { a: [-26, -104.5], b: [26, -104.5], w: 2 }, { a: [-146, 121], b: [-146, 161], w: 1 }, { a: [-121, 162], b: [-146, 162], w: 1 },
+  { a: [-26, -118.3], b: [26, -118.3], w: 2 },
+  // 🛣️ naye footpath — ring road, jod-sadkein, gaon, cyber city, purana shehar
+  { a: [-RING.x + 12, RING.zS + 10.1], b: [-40, RING.zS + 10.1], w: 2 }, { a: [40, RING.zS + 10.1], b: [RING.x - 12, RING.zS + 10.1], w: 2 },
+  { a: [-RING.x + 12, RING.zN - 10.1], b: [RING.x - 12, RING.zN - 10.1], w: 3 }, { a: [-RING.x + 12, RING.zN + 10.1], b: [RING.x - 12, RING.zN + 10.1], w: 2 },
+  { a: [-RING.x + 10.1, RING.zS + 12], b: [-RING.x + 10.1, RING.zN - 12], w: 2 }, { a: [RING.x - 10.1, RING.zS + 12], b: [RING.x - 10.1, RING.zN - 12], w: 2 },
+  { a: [-LINK_X + 10.1, RING.zS + 12], b: [-LINK_X + 10.1, RING.zN - 12], w: 2 }, { a: [-LINK_X - 10.1, RING.zS + 12], b: [-LINK_X - 10.1, RING.zN - 12], w: 2 },
+  { a: [LINK_X - 10.1, RING.zS + 12], b: [LINK_X - 10.1, RING.zN - 12], w: 2 }, { a: [LINK_X + 10.1, RING.zS + 12], b: [LINK_X + 10.1, RING.zN - 12], w: 2 },
+  { a: [-RING.x + 12, 10.1], b: [-160, 10.1], w: 2 }, { a: [-RING.x + 12, -10.1], b: [-160, -10.1], w: 2 },
+  { a: [160, 10.1], b: [RING.x - 12, 10.1], w: 2 }, { a: [160, -10.1], b: [RING.x - 12, -10.1], w: 2 },
+  { a: [-400, 160], b: [-190, 160], w: 2 }, { a: [-300, 40], b: [-300, 315], w: 1 },   // gaon ki pagdandi
+  { a: [-150, 610], b: [-30, 610], w: 1 }, { a: [30, 610], b: [150, 610], w: 1 },     // purana shehar
+ { a: [-146, 121], b: [-146, 161], w: 1 }, { a: [-121, 162], b: [-146, 162], w: 1 },
 ];
 const LANE_W = LANES.reduce((s, l) => s + l.w, 0);
 const pickLane = () => { let k = R() * LANE_W; for (const l of LANES) { if ((k -= l.w) <= 0) return l; } return LANES[0]; };
@@ -67,7 +78,7 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
     const old = !kid && R() < 0.15;
     const modern = female && !kid && !old && R() < 0.45;
     const h = makeHuman(kid ? { kid, female, outfit: female ? 'frock' : 'shirt', top: 0xffffff, bottom: 0x1f2f5a }
-      : modern ? { female, outfit: 'tshirt', top: pick([0x111111, 0xff3d7f, 0xffffff, 0xb14bff, 0xffd23f, 0xd94848]), bottom: pick([0x1f3a6a, 0x2a2a3a, 0x3a5a8a]), hairStyle: pick(['long', 'long', 'bun']), shades: R() < 0.45 }
+      : modern ? { female, outfit: pick(['jeans', 'crop', 'jeans', 'tshirt']), top: pick([0x111111, 0xff3d7f, 0xffffff, 0xb14bff, 0xffd23f, 0xd94848, 0x2ef2ff]), hairStyle: pick(['long', 'long', 'bun']), shades: R() < 0.45 }
         : { female, old });
     const f = R();
     const n = add(h, { type: 'walker', lane, f, kidW: kid, dir: R() < 0.5 ? 1 : -1, speed: kid ? 1.6 : old ? 0.9 : rnd(1.15, 1.5), off: rnd(-0.45, 0.45), x: 0, z: 0 });
@@ -115,7 +126,7 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
   }
 
   // ---------- GHAT ----------
-  const priest = add(makeHuman({ outfit: 'kurta', top: 0xff8c1a, bottom: 0xfff5e0, stache: true, beard: true, old: true }), { type: 'priest', x: -6, y: 0.03, z: -114.5, heading: 0 });
+  const priest = add(makeHuman({ outfit: 'kurta', top: 0xff8c1a, bottom: 0xfff5e0, stache: true, beard: true, old: true }), { type: 'priest', x: -6, y: 0.03, z: -118.5, heading: 0 });
   hold(priest.h, itemMesh('thali'));
   for (let i = 0; i < 5; i++) {
     const n = add(makeHuman({ female: i % 2 === 0 }), { type: 'static', x: -10 + i * 2, y: 0.03, z: -110.5, heading: 0 });
@@ -247,10 +258,12 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
     return { x: t.x + sx * 1.6, z: t.z + sz * 1.6, heading: t.heading, busy: false };
   }).filter((s) => footable(s.x, s.z));
   function respawn(n, cam) {
-    for (let k = 0; k < 12; k++) {
+    // bada shehar: player ke aas-paas (30–140m) hi wapas aao, warna mohalla khaali lagega
+    for (let k = 0; k < 40; k++) {
       const lane = pickLane(), f = R();
       const x = lane.a[0] + (lane.b[0] - lane.a[0]) * f, z = lane.a[1] + (lane.b[1] - lane.a[1]) * f;
-      if (Math.hypot(x - cam.x, z - cam.z) > 30 || k === 11) {
+      const d = Math.hypot(x - cam.x, z - cam.z);
+      if ((d > 30 && d < 140) || (k > 30 && d > 30) || k === 39) {
         n.lane = lane; n.f = f; n.dir = R() < 0.5 ? 1 : -1; n.x = x; n.z = z;
         n.pause = 0; n.backToLane = false; n.faceTo = null;
         n.heading = headingTo((lane.b[0] - lane.a[0]) * n.dir, (lane.b[1] - lane.a[1]) * n.dir);
@@ -326,6 +339,8 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
       }
       const dCam = Math.hypot(n.x - cam.x, n.z - cam.z);
       const far = dCam > 120;
+      // bahut door ka raahgir → chupke se player ke paas
+      if (n.type === 'walker' && !n.cop && !n.girl?.gf && !n.fall && !n.talking && !n.spot && dCam > 180 && R() < dt * 0.6) { respawn(n, cam); continue; }
       if (n.riding) continue;
       if (n.scene) { n.h.root.visible = true; updateHuman(n.h, dt, t); continue; }
       n.h.root.visible = !far;

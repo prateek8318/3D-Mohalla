@@ -47,6 +47,7 @@ export function buildHighway(scene, { tree, triggers, keepers, defs }) {
     // ped aur khambe
     for (let x = 80; x < HWY_X - 5; x += 18) {
       for (const zs of [-1, 1]) {
+        if (Math.abs(x - 175) < 18) continue; // jod-sadak ke beech ped nahi
         if (Math.random() < 0.55) tree(s * (x + Math.random() * 6), Z + zs * (12.5 + Math.random() * 3), 0.7 + Math.random() * 0.5);
       }
     }

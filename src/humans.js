@@ -9,6 +9,8 @@ const HAIR = [0x0a0a0a, 0x16100b, 0x24170e];
 const M_TOPS = [0xffffff, 0x2f5fa8, 0xd94848, 0x3d8f5a, 0xe8c547, 0x7a4ab0, 0xf09a40, 0x4ab0c8, 0xc8b28a, 0xf2e6d0];
 const F_TOPS = [0xd81b60, 0xff7a00, 0x8e24aa, 0x00897b, 0xfdd835, 0xe53935, 0x3949ab, 0xff4081, 0x26a69a, 0xffb300];
 const M_BOTTOMS = [0x2a2a40, 0x3a3a3a, 0x5a4a3a, 0x1f3a6a, 0xe8e0d0, 0x4a5a3a];
+const DENIM = [0x2b4a7a, 0x1f3358, 0x3d6aa0, 0x16213a, 0x5a7fb0];
+const isModernF = (o) => o === 'jeans' || o === 'crop';
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _c = new THREE.Color();
@@ -129,7 +131,12 @@ function torsoGeo(s) {
   const bw = s.buff || 0, fem = s.female && !s.kid;
   const topD = darker(top, 0.88);
   // kamar (patli) → seena (chauda) → kandhe: putle jaisa ek capsule nahi
-  parts.push(P(cyl(fem ? 0.135 : 0.15, fem ? 0.145 : 0.155, 0.27, 12), top, [0, 0.13, 0], [0, 0, 0], [1.08 + bw * 0.06, 1, 0.74]));
+  const crop = o === 'crop';
+  parts.push(P(cyl(fem ? 0.135 : 0.15, fem ? 0.145 : 0.155, 0.27, 12), crop ? s.skin : top, [0, 0.13, 0], [0, 0, 0], [1.08 + bw * 0.06, 1, 0.74]));
+  if (crop) {
+    parts.push(P(sph(0.008, 5, 4), darker(s.skin, 0.7), [0, 0.1, -0.106])); // naabhi
+    parts.push(P(cyl(0.155, 0.15, 0.06, 12), darker(top, 0.85), [0, 0.27, 0], [0, 0, 0], [1.08, 1, 0.76])); // crop top ka kinara
+  }
   parts.push(P(sph(0.19, 14, 10), top, [0, 0.35, 0], [0, 0, 0], [fem ? 1.0 : 1.13 + bw * 0.16, 0.95, 0.74 + bw * 0.07]));
   parts.push(P(cap(0.06 + bw * 0.008, 0.28 + bw * 0.03, 8), top, [0, 0.45, 0.01], [0, 0, Math.PI / 2], [1, 0.9, 0.85]));
   // trapezius — gardan se kandhe tak dhalaan
@@ -143,8 +150,10 @@ function torsoGeo(s) {
     parts.push(P(box(0.012, 0.42, 0.006), topD, [0, 0.28, -0.141])); // button patti
     for (let i = 0; i < 4; i++) parts.push(P(sph(0.008, 4, 3), 0xeeeeee, [0, 0.44 - i * 0.1, -0.145]));
     parts.push(P(box(0.05, 0.05, 0.006), topD, [0.075, 0.38, -0.138])); // jeb
-  } else if (o === 'tshirt') {
+  } else if (o === 'tshirt' || o === 'jeans') {
     parts.push(P(new THREE.TorusGeometry(0.058, 0.012, 5, 14), topD, [0, 0.53, -0.005], [Math.PI / 2, 0, 0], [1, 1.1, 1]));
+  } else if (o === 'crop') {
+    for (const x of [-1, 1]) parts.push(P(box(0.025, 0.12, 0.012), top, [x * 0.09, 0.5, -0.04], [0.2, 0, x * -0.15])); // patli strap
   } else if (o === 'kurta' || o === 'salwar') {
     parts.push(P(cyl(0.2, 0.25, o === 'salwar' ? 0.55 : 0.5, 12), top, [0, o === 'salwar' ? -0.16 : -0.14, 0], [0, 0, 0], [1, 1, 0.82]));
     if (o === 'kurta') {
@@ -182,7 +191,7 @@ function pelvisGeo(s) {
   else if (o === 'lungi') parts.push(P(cyl(0.165, 0.2, 0.62, 12), s.bottom, [0, -0.33, 0]));
   else if (o === 'frock') parts.push(P(cyl(0.15, 0.3, 0.42, 12), s.top, [0, -0.2, 0]));
   // patloon pe belt
-  if (['shirt', 'tshirt', 'jacket', 'police'].includes(o) && !s.kid) {
+  if (['shirt', 'tshirt', 'jacket', 'police', 'jeans', 'crop'].includes(o) && !s.kid) {
     parts.push(P(cyl(0.165, 0.165, 0.045, 14), o === 'police' ? 0x3a2410 : 0x231509, [0, 0.075, 0], [0, 0, 0], [1.1, 1, 0.84]));
     parts.push(P(box(0.05, 0.035, 0.01), 0xd4af37, [0, 0.075, -0.142]));
   }
@@ -193,6 +202,11 @@ const sleeveFull = (o) => ['kurta', 'police', 'salwar', 'jacket'].includes(o);
 function upperArmGeo(s) {
   const b = s.buff || 0, parts = [];
   const r = (s.female ? 0.044 : 0.05) + b * 0.014;
+  if (s.outfit === 'crop') { // bina baanh — poora haath khula
+    parts.push(P(sph(r + 0.004, 10, 8), s.skin, [0, -0.04, 0], [0, 0, 0], [1, 1.1, 1]));
+    parts.push(P(cap(r, 0.22, 8), s.skin, [0, -0.16, 0]));
+    return merge(parts);
+  }
   parts.push(P(sph(r + 0.008, 10, 8), s.top, [0, -0.04, 0], [0, 0, 0], [1, 1.15, 1])); // kandha (deltoid)
   if (sleeveFull(s.outfit)) parts.push(P(cap(r + 0.004, 0.22, 8), s.top, [0, -0.16, 0]));
   else {
@@ -234,7 +248,12 @@ function shinGeo(s) {
 // takhne se neeche: joota / chappal — alag hissa taaki pair mude
 function footGeo(s) {
   const parts = [];
-  if (s.outfit === 'kurta' || s.outfit === 'lungi' || (s.female && !s.kid)) {
+  if (isModernF(s.outfit)) {
+    // 👟 sneakers
+    parts.push(P(box(0.1, 0.035, 0.25), 0xf4f4f4, [0, -0.055, -0.05]));
+    parts.push(P(box(0.09, 0.06, 0.19), s.outfit === 'crop' ? 0xff4f9b : 0xffffff, [0, -0.02, -0.02]));
+    parts.push(P(sph(0.047, 8, 6), 0xffffff, [0, -0.03, -0.13], [0, 0, 0], [0.95, 0.65, 1.1]));
+  } else if (s.outfit === 'kurta' || s.outfit === 'lungi' || (s.female && !s.kid)) {
     // chappal + nanga pair
     parts.push(P(box(0.095, 0.02, 0.25), s.female ? 0x8a3a20 : 0x3a2a1a, [0, -0.06, -0.05]));
     parts.push(P(box(0.08, 0.045, 0.2), s.skin, [0, -0.03, -0.05]));
@@ -255,15 +274,17 @@ export function makeHuman(o = {}) {
     female, kid,
     skin: o.skin ?? pick(SKIN),
     top: o.top ?? pick(female ? F_TOPS : M_TOPS),
-    bottom: o.bottom ?? (female ? pick(F_TOPS) : pick(M_BOTTOMS)),
+    bottom: o.bottom,
     hair: o.hair ?? pick(HAIR),
     hairStyle: o.hairStyle ?? (female ? pick(['long', 'bun', 'choti']) : pick(['short', 'side', 'short', 'curly'])),
-    outfit: o.outfit ?? (female ? (kid ? 'frock' : pick(['saree', 'salwar', 'saree'])) : kid ? pick(['shirt', 'tshirt']) : pick(['shirt', 'shirt', 'kurta', 'tshirt', 'lungi'])),
+    outfit: o.outfit ?? (female ? (kid ? 'frock' : pick(['saree', 'salwar', 'saree', 'jeans', 'crop', 'salwar', 'jeans'])) : kid ? pick(['shirt', 'tshirt']) : pick(['shirt', 'shirt', 'kurta', 'tshirt', 'lungi'])),
     stache: o.stache ?? (!female && !kid && Math.random() < 0.55),
     buff: o.buff ?? (!female && !kid && !o.old ? 0.5 + Math.random() * 0.5 : 0),
     beard: o.beard ?? false, hat: o.hat ?? null, shades: o.shades ?? false, print: o.print ?? null, dupatta: o.dupatta, capColor: o.capColor,
     old: !!o.old, hero: !!o.hero, inner: o.inner,
   };
+  if (s.bottom === undefined) s.bottom = isModernF(s.outfit) ? pick(DENIM) : female ? pick(F_TOPS) : pick(M_BOTTOMS);
+  if (isModernF(s.outfit) && o.hairStyle === undefined) s.hairStyle = pick(['long', 'long', 'bun']);
   if (o.old) { s.hair = 0xd4d4d4; if (!female && Math.random() < 0.5) s.hairStyle = 'bald'; }
   if (s.outfit === 'tshirt' && !s.print && Math.random() < 0.5) s.print = pick([0xffd23f, 0xff3d7f, 0x2ef2ff, 0xffffff]);
 
@@ -405,7 +426,8 @@ function pose(h, t, dt) {
       break;
     }
     case 'sit': case 'cards':
-      T.hy = 0.5; T.lL = T.lR = 1.5; T.kL = T.kR = -1.5; T.aLx = T.aRx = 0.45; T.eL = T.eR = 0.7;
+      // haath apni-apni jaangh pe (beech mein milke 'haath jode' jaisa na lage)
+      T.hy = 0.5; T.lL = T.lR = 1.5; T.kL = T.kR = -1.5; T.aLx = T.aRx = 0.35; T.eL = T.eR = 0.55; T.aLz = -0.14; T.aRz = 0.14;
       T.sx = 0.02 * Math.sin(t * 1.6 + ph); T.fL = T.fR = 0;
       if (h.action === 'cards') { T.aRx = 0.9 + Math.sin(t * 2 + ph) * 0.15; T.eR = 1.2; T.aLx = 0.8; T.eL = 1.1; T.hdx = -0.25; }
       break;

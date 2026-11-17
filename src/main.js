@@ -26,6 +26,8 @@ import { buildHighway } from './highway.js';
 import { createWeapons, GUNS } from './weapons.js';
 import { createStory } from './story.js';
 import { cloud } from './cloud.js';
+import { buildDistricts, HOSPITAL } from './districts.js';
+import { ZONES } from './collide.js';
 import { ROOF, LIFT } from './hotel.js';
 import { makeEnv, computeEnv, clockLabel, phase, RetroShader, HOUR_SECONDS } from './daytime.js';
 import { GHAT, SHAYARI, UI, WISHES, CALLS, GENERIC, KISS_LINES, PHASES, pick } from './data.js';
@@ -184,7 +186,7 @@ const snipSfx = () => noise(0.05, 0.15, 3000);
 const sirenSfx = () => { glide(650, 1050, 0.5, 'sawtooth', 0.025); glide(1050, 650, 0.5, 'sawtooth', 0.025, 0.5); };
 
 // ---------- WORLD ----------
-let world, rick, places, places2, animals, couple, couples, npcs, me, traffic, ownCar, hotel, drawMap, station, ui3d, missions, weapons, story;
+let districts, world, rick, places, places2, animals, couple, couples, npcs, me, traffic, ownCar, hotel, drawMap, station, ui3d, missions, weapons, story;
 const shootTargets = [];
 let aimYaw = 0, aimPitch = 0, lastShotWanted = 0, lastHurt = -99;
 let car = { pos: new THREE.Vector3(0, 0, 80), heading: 0, speed: 0 };
@@ -371,6 +373,7 @@ const PLACES = () => [
   { label: '🚂 Mohalla Junction (Station)', x: 0, z: 438, h: 0, drive: true },
   { label: '🛣️ Highway Dhaba', x: -220, z: 330, h: -Math.PI / 2, drive: true },
   { label: '🔫 Kallu Kattewala (Park)', x: -121, z: 151, h: Math.PI / 2 },
+  ...(districts?.places || []),
   ...world.triggers.filter((t) => t.def.items && !t.keeper?.stall).map((t) => ({ label: `${t.def.avatar} ${t.def.name[L()]}`, x: t.x, z: t.z + (t.def === GHAT ? 5 : 0), h: t.heading })),
 ];
 function openPlaces() {
@@ -768,6 +771,10 @@ function buy(def, it, trig) {
       break;
     }
     case 'polish': state.polishAt = t; line = X().polish; break;
+    case 'heal': state.hp = 100; lastHurt = -99; flash('sugar'); break;
+    case 'life':
+      if (state.lives >= MAX_LIVES) { setMoney(state.money + it.p); say('❤️ Lifeline pehle se poori hai (3/3) — paise wapas'); return; }
+      state.lives++; updateLivesHud(); flash('love'); break;
     case 'romance':
       state.romance = !state.romance;
       if (state.romance) flash('love');
@@ -1298,6 +1305,7 @@ function onShot(o) {
   if (t - lastShotWanted > 3 && npcs.cops.some((c) => Math.hypot(c.x - walker.pos.x, c.z - walker.pos.z) < 70)) { lastShotWanted = t; addWanted(1); }
 }
 function onHitNpc(n) {
+  { const dx = n.x - walker.pos.x, dz = n.z - walker.pos.z, d = Math.hypot(dx, dz) || 1; bloodSpray(n.x, 1.3, n.z, dx / d * 0.6, dz / d * 0.6, 10); setTimeout(() => bloodDecal(n.x, n.z, 1.6, 1), 800); }
   npcs.shootNpc(n, walker.pos);
   noise(0.08, 0.3, 200);
   if (n.cop) addWanted(2);
@@ -1372,7 +1380,7 @@ function wasted() {
   deathScreen('wasted', 'WASTED 💀', left > 0 ? `Aspatal ka bill ₹${fee} • ❤️ ${left} lifeline baaki` : 'Saari lifeline khatam!', () => {
     if (left <= 0) return gameOver();
     setMoney(state.money - fee);
-    respawnAt(-58, 4, Math.PI / 2); // Mandir ke saamne hosh aaya
+    respawnAt(HOSPITAL.x, HOSPITAL.z + 6, HOSPITAL.h); // 🏥 City Hospital ke bahar hosh aaya
     toast(`🏥 Hosh aa gaya… ₹${fee} ilaaj mein gaye. ❤️ ${left} baaki`, 3500);
   });
 }
@@ -1475,6 +1483,101 @@ function explode(v) {
   if (v === car && state.mode === 'drive') { exitRick(true); hurt(55); toast('💥 GAADI PHAT GAYI!', 2200); }
   else if (d < 6) hurt(Math.round(40 * (1 - d / 6)) + 10);
   npcs.panic(v.pos, 30);
+}
+// ---------- 🩸 ACCIDENT: khoon + udti cheezein ----------
+const bloodTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const blob = (x, y, r, a) => { g.fillStyle = `rgba(${90 + Math.random() * 40},0,${Math.random() * 8},${a})`; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); };
+  for (let i = 0; i < 14; i++) blob(64 + (Math.random() - 0.5) * 40, 64 + (Math.random() - 0.5) * 40, 10 + Math.random() * 18, 0.85);
+  for (let i = 0; i < 40; i++) { const a = Math.random() * 7, d = 30 + Math.random() * 30; blob(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 1.5 + Math.random() * 4, 0.9); }
+  blob(64, 64, 16, 0.6);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+})();
+const bloodMat = new THREE.MeshStandardMaterial({ map: bloodTex, transparent: true, depthWrite: false, roughness: 0.25, metalness: 0.1, polygonOffset: true, polygonOffsetFactor: -2 });
+const decalGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+const decals = [];
+let decalN = 0;
+function bloodDecal(x, z, size = 1.5, grow = 0) {
+  if (decals.length > 45) { const o = decals.shift(); scene.remove(o.m); o.m.material.dispose(); }
+  const m = new THREE.Mesh(decalGeo, bloodMat.clone());
+  m.position.set(x, 0.04 + (decalN++ % 20) * 0.0015, z);
+  m.rotation.y = Math.random() * 6.28;
+  m.scale.setScalar(grow ? size * 0.25 : size);
+  scene.add(m);
+  decals.push({ m, size, grow, t: 0 });
+}
+const dropMat = new THREE.MeshBasicMaterial({ color: 0x7a0008 });
+const dropGeo = new THREE.SphereGeometry(0.06, 5, 4);
+const debris = [];
+function addDebris(m, x, y, z, vx, vy, vz, blood = false, life = 40) {
+  m.position.set(x, y, z);
+  scene.add(m);
+  debris.push({ m, vx, vy, vz, sx: (Math.random() - 0.5) * 14, sy: (Math.random() - 0.5) * 14, life, blood, rest: false });
+}
+function bloodSpray(x, y, z, dx, dz, n = 14) {
+  for (let i = 0; i < n; i++) {
+    const s = 3 + Math.random() * 6;
+    addDebris(new THREE.Mesh(dropGeo, dropMat), x, y, z, dx * s + (Math.random() - 0.5) * 4, 2 + Math.random() * 4, dz * s + (Math.random() - 0.5) * 4, true, 3);
+  }
+}
+const JUNK = [
+  () => { const g = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.03, 0.26), new THREE.MeshStandardMaterial({ color: 0x5a3a20 })); return g; }, // chappal
+  () => new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.26, 0.12), new THREE.MeshStandardMaterial({ color: pick([0xd94848, 0x2f5fa8, 0x3d8f5a, 0xe8c547]) })), // thaila
+  () => new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), new THREE.MeshStandardMaterial({ color: pick([0x2f8a2f, 0xff6a00, 0xd0001a, 0xffd23f]) })), // sabzi/phal
+  () => { const m = itemMesh('phone'); m.scale.setScalar(1.6); return m; },
+  () => new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.15, 0.08, 10), new THREE.MeshStandardMaterial({ color: 0x111111 })), // topi
+];
+function accidentFx(n, speed, heading) {
+  const dx = -Math.sin(heading), dz = -Math.cos(heading);
+  const k = Math.min(1.4, speed / 10);
+  // takkar ki jagah chheente
+  bloodSpray(n.x, 1.0, n.z, dx * k, dz * k, Math.round(10 + 12 * k));
+  bloodDecal(n.x, n.z, 1.0 + k * 0.6);
+  // haath ka saaman udd jaaye
+  if (n.h.held) {
+    const it = n.h.held, wp = new THREE.Vector3();
+    it.getWorldPosition(wp);
+    hold(n.h, null);
+    n.smoker = false;
+    it.scale.multiplyScalar(1.6);
+    addDebris(it, wp.x, wp.y, wp.z, dx * speed * 0.8 + (Math.random() - 0.5) * 3, 4 + Math.random() * 3, dz * speed * 0.8 + (Math.random() - 0.5) * 3);
+  }
+  const cnt = 2 + Math.floor(Math.random() * 3 * k);
+  for (let i = 0; i < cnt; i++) {
+    const m = pick(JUNK)();
+    m.castShadow = true;
+    addDebris(m, n.x, 0.9, n.z, dx * speed * (0.4 + Math.random() * 0.6) + (Math.random() - 0.5) * 4, 3 + Math.random() * 5, dz * speed * (0.4 + Math.random() * 0.6) + (Math.random() - 0.5) * 4);
+  }
+  // gire wahan bada khoon ka talaab (dheere failta hua)
+  setTimeout(() => { bloodDecal(n.x, n.z, 3 + k * 1.2, 1); bloodDecal(n.x - dx * 1.4, n.z - dz * 1.4, 1.6); bloodDecal(n.x - dx * 2.8, n.z - dz * 2.8, 0.9); }, 950);
+  flash('slap');
+}
+function updateGore(dt) {
+  for (let i = debris.length - 1; i >= 0; i--) {
+    const d = debris[i];
+    d.life -= dt;
+    if (d.life <= 0) { scene.remove(d.m); debris.splice(i, 1); continue; }
+    if (d.rest) continue;
+    d.vy -= 18 * dt;
+    d.m.position.x += d.vx * dt; d.m.position.y += d.vy * dt; d.m.position.z += d.vz * dt;
+    d.m.rotation.x += d.sx * dt; d.m.rotation.y += d.sy * dt;
+    if (d.m.position.y <= 0.05) {
+      d.m.position.y = 0.05;
+      if (d.blood) { if (Math.random() < 0.35) bloodDecal(d.m.position.x, d.m.position.z, 0.25 + Math.random() * 0.35); d.life = 0; continue; }
+      if (Math.abs(d.vy) < 1.5) { d.rest = true; d.m.rotation.x = Math.round(d.m.rotation.x / Math.PI) * Math.PI; continue; }
+      d.vy *= -0.35; d.vx *= 0.55; d.vz *= 0.55; d.sx *= 0.5; d.sy *= 0.5;
+      noise(0.03, 0.04, 2500);
+    }
+  }
+  for (let i = decals.length - 1; i >= 0; i--) {
+    const d = decals[i];
+    d.t += dt;
+    if (d.grow && d.t < 3) d.m.scale.setScalar(d.size * (0.25 + 0.75 * Math.min(1, d.t / 3)));
+    if (d.t > 80) d.m.material.opacity = Math.max(0, 1 - (d.t - 80) / 20);
+    if (d.t > 100) { scene.remove(d.m); d.m.material.dispose(); decals.splice(i, 1); }
+  }
 }
 let smokeT = 0;
 function updateVehicleDamage(dt) {
@@ -2049,6 +2152,7 @@ function tick() {
   world.update(t, dt, lv, fx, active.pos, env);
   places.update(t, dt, env);
   places2.update(t);
+  districts.update(t, dt, env);
   couples.update(dt, t, camera.position);
   if (!state.cine) couple.idle(t);
   const ev = animals.update(t, dt, ctxPlayer, state, env.night, traffic ? [ownCar, ...traffic.vehicles] : [ownCar]);
@@ -2074,6 +2178,7 @@ function tick() {
       if (e.type === 'hit') {
         addWanted(1);
         missions.notify('hit');
+        accidentFx(e.n, e.speed, car.heading);
         glide(200, 80, 0.2, 'triangle', 0.1);
         const line = gaali('hitPed') || pick(PED[L()].hit);
         ui3d.bubble(e.n.h.root, '😵 ' + line, 'loud', 3.2);
@@ -2120,7 +2225,7 @@ function tick() {
   retroPass.uniforms.cine.value = state.cineFx ? 1 : 0;
   retroPass.uniforms.time.value = t;
   retroPass.enabled = retroAmt > 0.01 || state.cineFx;
-  renderer.toneMappingExposure = 1.15 - env.day * 0.15;
+  renderer.toneMappingExposure = 1.08 - env.day * 0.2;
 
   hotel.update(t, dt, lv, { night: env.night, party });
   if (station.update(t, dt, active.pos) === 'horn') { glide(220, 210, 1.4, 'sawtooth', 0.05); glide(330, 320, 1.4, 'sawtooth', 0.03); toast('🚂 Chhuk chhuk! Train aa rahi hai', 2000); }
@@ -2128,6 +2233,7 @@ function tick() {
   if (started && t - lastHurt > 6 && state.hp < 100) { state.hp = Math.min(100, state.hp + dt * 5); }
   if (started) {
     updateVehicleDamage(dt);
+    updateGore(dt);
     if (state.lives <= 0 && !state.open) gameOver(); // popup band kar diya to bhi wapas aaye
     // har 5 minute mein ek lifeline wapas
     if (state.lives < MAX_LIVES) { state.lifeRegen += dt; if (state.lifeRegen > 300) { state.lifeRegen = 0; state.lives++; updateLivesHud(); toast('❤️ Ek lifeline wapas mili!', 2200); } }
@@ -2167,7 +2273,9 @@ function tick() {
     camera.position.set(Math.sin(a) * 34, 20 + Math.sin(t * 0.3) * 3, Math.cos(a) * 34 + 10);
     camera.lookAt(0, 4, 0);
   }
-  bloom.strength = (0.75 + lv.bass * 0.6) * (0.45 + 0.55 * env.night) + (state.romance ? 0.25 : 0);
+  // din mein bloom kam + sirf asli chamakti cheezein glow karein (pehle safed deewarein bhi chamakti thi)
+  bloom.strength = (0.6 + lv.bass * 0.5) * (0.22 + 0.78 * env.night) + (state.romance ? 0.2 : 0);
+  bloom.threshold = 0.85 + env.day * 0.35;
   composer.render();
   requestAnimationFrame(tick);
 }
@@ -2211,6 +2319,7 @@ async function boot() {
   setAction(me, 'drive');
   hotel = buildHotel(scene, { triggers: world.triggers, keepers: world.keepers });
   buildHighway(scene, { tree: places.tree, triggers: world.triggers, keepers: world.keepers, defs: { hdhaba: HDHABA } });
+  districts = buildDistricts(scene, { triggers: world.triggers, keepers: world.keepers, isTouch });
   KALLU.keeper = { outfit: 'jacket', top: 0x111111, bottom: 0x222222, shades: true, stache: true, buff: 1, hat: 'cap', capColor: 0x111111 };
   { const k = { id: 'kallu', def: KALLU, x: -123.4, z: 151, heading: -Math.PI / 2, stall: true }; world.keepers.push(k); world.triggers.push({ def: KALLU, x: -121.2, z: 151, heading: Math.PI / 2, r: 3.2, foot: true, keeper: k, front: { x: -116, z: 141 } }); }
   npcs = buildNPCs(scene, { world, places2, isTouch });
@@ -2226,12 +2335,13 @@ async function boot() {
     sfx: (k) => { if (k === 'glass') noise(0.12, 0.35, 3000); else beep([880, 1320], 0.08, 'sine', 0.05); },
     load: () => { try { return JSON.parse(localStorage.getItem('mohalla.save') || 'null')?.story || 0; } catch { return 0; } }, save: () => saveGame(),
   });
-  drawMap = buildMinimap($('minimap'), { triggers: world.triggers });
+  drawMap = buildMinimap($('minimap'), { triggers: world.triggers, zones: ZONES, extraIcons: districts.icons });
   ui3d = createUI3D(camera);
   const shopNames = Object.fromEntries(world.triggers.filter((tr) => tr.keeper).map((tr) => [tr.def.id, tr]));
   const DESTS = [
     ['🚂 Station', 0, 440], ['🌙 Prem Ghat', 0, -104], ['🏨 Hotel Raj Palace', 75, 128], ['🏏 Gandhi Park', -112, 140], ['🚓 Thana', 112, 140],
-    ['🛕 Mandir', -58, 0], ['🕌 Masjid', 58, 0], ['🎧 Chowk', 0, 14], ['🛍️ Bazaar Gali', -6, 200], ['🍬 Gupta Mishthan', -6, 45], ['☕ Pappu Chai', -6, 20],
+    ['🎧 Chowk', 0, 14], ['🛍️ Bazaar Gali', -6, 200], ['🍬 Gupta Mishthan', -6, 45], ['☕ Pappu Chai', -6, 20],
+    ...districts.dests,
   ].map(([name, x, z]) => ({ name, ...roadPoint(x, z) }));
   const drops = world.balconies.map((b) => {
     const gx = b.x - Math.sin(b.heading) * 1.6, gz = b.z - Math.cos(b.heading) * 1.6;

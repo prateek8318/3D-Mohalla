@@ -126,11 +126,36 @@ function headGeo(s) {
 
 function torsoGeo(s) {
   const parts = [], o = s.outfit, top = s.top;
-  const bw = s.buff || 0;
-  parts.push(P(cap(0.155, 0.28, 10), top, [0, 0.29, 0], [0, 0, 0], [1.2 + bw * 0.18, 1 + bw * 0.04, 0.72 + bw * 0.08]));
-  if (bw > 0.5 && (o === 'tshirt' || o === 'shirt' || o === 'jacket')) parts.push(P(sph(0.09, 8, 6), top, [0, 0.4, -0.06], [0, 0, 0], [2.4, 0.8, 0.9]));
-  parts.push(P(cyl(0.05, 0.055, 0.1, 8), s.skin, [0, 0.56, 0]));
-  if (o === 'kurta' || o === 'salwar') parts.push(P(cyl(0.2, 0.25, o === 'salwar' ? 0.55 : 0.45, 12), top, [0, o === 'salwar' ? -0.16 : -0.11, 0]));
+  const bw = s.buff || 0, fem = s.female && !s.kid;
+  const topD = darker(top, 0.88);
+  // kamar (patli) → seena (chauda) → kandhe: putle jaisa ek capsule nahi
+  parts.push(P(cyl(fem ? 0.135 : 0.15, fem ? 0.145 : 0.155, 0.27, 12), top, [0, 0.13, 0], [0, 0, 0], [1.08 + bw * 0.06, 1, 0.74]));
+  parts.push(P(sph(0.19, 14, 10), top, [0, 0.35, 0], [0, 0, 0], [fem ? 1.0 : 1.13 + bw * 0.16, 0.95, 0.74 + bw * 0.07]));
+  parts.push(P(cap(0.06 + bw * 0.008, 0.28 + bw * 0.03, 8), top, [0, 0.45, 0.01], [0, 0, Math.PI / 2], [1, 0.9, 0.85]));
+  // trapezius — gardan se kandhe tak dhalaan
+  for (const x of [-1, 1]) parts.push(P(sph(0.07 + bw * 0.01, 8, 6), top, [x * 0.085, 0.5, 0.02], [0, 0, x * 0.5], [1.4, 0.7, 0.9]));
+  if (fem) parts.push(P(sph(0.075, 10, 8), top, [0, 0.36, -0.07], [0, 0, 0], [2.1, 0.85, 0.75]));
+  else if (bw > 0.4 && o !== 'kurta' && o !== 'police') for (const x of [-1, 1]) parts.push(P(sph(0.085, 8, 6), top, [x * 0.075, 0.385, -0.075], [0, 0, 0], [1.1, 0.75, 0.55])); // seena 💪
+  parts.push(P(cyl(0.052, 0.06, 0.12, 8), s.skin, [0, 0.555, 0]));
+  // kapdon ki detail
+  if (o === 'shirt' || o === 'police') {
+    for (const x of [-1, 1]) parts.push(P(box(0.07, 0.012, 0.05), topD, [x * 0.04, 0.535, -0.06], [0.5, x * 0.6, x * 0.5])); // collar
+    parts.push(P(box(0.012, 0.42, 0.006), topD, [0, 0.28, -0.141])); // button patti
+    for (let i = 0; i < 4; i++) parts.push(P(sph(0.008, 4, 3), 0xeeeeee, [0, 0.44 - i * 0.1, -0.145]));
+    parts.push(P(box(0.05, 0.05, 0.006), topD, [0.075, 0.38, -0.138])); // jeb
+  } else if (o === 'tshirt') {
+    parts.push(P(new THREE.TorusGeometry(0.058, 0.012, 5, 14), topD, [0, 0.53, -0.005], [Math.PI / 2, 0, 0], [1, 1.1, 1]));
+  } else if (o === 'kurta' || o === 'salwar') {
+    parts.push(P(cyl(0.2, 0.25, o === 'salwar' ? 0.55 : 0.5, 12), top, [0, o === 'salwar' ? -0.16 : -0.14, 0], [0, 0, 0], [1, 1, 0.82]));
+    if (o === 'kurta') {
+      parts.push(P(cyl(0.062, 0.066, 0.04, 10), topD, [0, 0.535, 0])); // band collar
+      parts.push(P(box(0.02, 0.2, 0.006), topD, [0, 0.42, -0.142]));
+      for (let i = 0; i < 3; i++) parts.push(P(sph(0.008, 4, 3), 0xd4af37, [0, 0.5 - i * 0.06, -0.146]));
+    }
+  } else if (o === 'jacket') {
+    for (const x of [-1, 1]) parts.push(P(box(0.11, 0.42, 0.02), darker(top, 0.7), [x * 0.075, 0.3, -0.135], [0, x * -0.25, 0])); // khula jacket
+    parts.push(P(box(0.1, 0.38, 0.01), s.inner ?? 0xf2f2f2, [0, 0.3, -0.13]));
+  }
   if (o === 'saree') {
     parts.push(P(box(0.05, 0.62, 0.3), s.bottom, [0.02, 0.3, -0.005], [0, 0, 0.62]));
     parts.push(P(cyl(0.12, 0.15, 0.12, 10), s.skin, [0, 0.07, 0]));
@@ -138,37 +163,89 @@ function torsoGeo(s) {
   if (o === 'salwar') parts.push(P(new THREE.TorusGeometry(0.17, 0.03, 6, 16), s.dupatta ?? 0xffffff, [0, 0.47, -0.02], [Math.PI / 2 + 0.3, 0, 0], [1, 0.8, 1]));
   if (o === 'police') {
     parts.push(P(cyl(0.17, 0.17, 0.05, 12), 0x2a1a10, [0, 0.03, 0], [0, 0, 0], [1.15, 1, 0.8]));
-    parts.push(P(box(0.05, 0.03, 0.02), 0xffc83d, [0.08, 0.38, -0.12]));
+    parts.push(P(box(0.05, 0.03, 0.02), 0xffc83d, [0.08, 0.38, -0.14]));
+    for (const x of [-1, 1]) parts.push(P(box(0.08, 0.015, 0.06), 0x6a5a30, [x * 0.17, 0.5, 0], [0, 0, x * -0.2])); // epaulette
   }
-  if (o === 'tshirt' && s.print) parts.push(P(box(0.14, 0.12, 0.01), s.print, [0, 0.33, -0.115]));
-  if (o === 'shirt') for (let i = 0; i < 3; i++) parts.push(P(sph(0.008, 4, 3), 0xeeeeee, [0, 0.42 - i * 0.09, -0.113]));
+  if (o === 'tshirt' && s.print) parts.push(P(box(0.14, 0.12, 0.01), s.print, [0, 0.33, -0.14]));
+  // 🦸 hero: sone ki chain
+  if (s.hero) {
+    parts.push(P(new THREE.TorusGeometry(0.078, 0.009, 5, 22), 0xffc83d, [0, 0.5, -0.03], [Math.PI / 2 - 0.55, 0, 0]));
+    parts.push(P(box(0.025, 0.035, 0.008), 0xffc83d, [0, 0.43, -0.105], [0.3, 0, Math.PI / 4]));
+  }
   return merge(parts);
 }
 
 function pelvisGeo(s) {
   const parts = [], o = s.outfit;
-  parts.push(P(sph(0.155, 12, 8), s.bottom, [0, 0, 0], [0, 0, 0], [1.15, 0.7, 0.8]));
+  parts.push(P(sph(0.155, 12, 8), s.bottom, [0, -0.01, 0], [0, 0, 0], [1.12, 0.72, 0.82]));
   if (o === 'saree') parts.push(P(cyl(0.17, 0.27, 0.9, 14), s.bottom, [0, -0.45, 0]));
   else if (o === 'lungi') parts.push(P(cyl(0.165, 0.2, 0.62, 12), s.bottom, [0, -0.33, 0]));
   else if (o === 'frock') parts.push(P(cyl(0.15, 0.3, 0.42, 12), s.top, [0, -0.2, 0]));
+  // patloon pe belt
+  if (['shirt', 'tshirt', 'jacket', 'police'].includes(o) && !s.kid) {
+    parts.push(P(cyl(0.165, 0.165, 0.045, 14), o === 'police' ? 0x3a2410 : 0x231509, [0, 0.075, 0], [0, 0, 0], [1.1, 1, 0.84]));
+    parts.push(P(box(0.05, 0.035, 0.01), 0xd4af37, [0, 0.075, -0.142]));
+  }
   return merge(parts);
 }
 
 const sleeveFull = (o) => ['kurta', 'police', 'salwar', 'jacket'].includes(o);
-function upperArmGeo(s) { const b = s.buff || 0; return merge([P(cap(0.05 + b * 0.012, 0.22, 8), s.top, [0, -0.16, 0])]); }
+function upperArmGeo(s) {
+  const b = s.buff || 0, parts = [];
+  const r = (s.female ? 0.044 : 0.05) + b * 0.014;
+  parts.push(P(sph(r + 0.008, 10, 8), s.top, [0, -0.04, 0], [0, 0, 0], [1, 1.15, 1])); // kandha (deltoid)
+  if (sleeveFull(s.outfit)) parts.push(P(cap(r + 0.004, 0.22, 8), s.top, [0, -0.16, 0]));
+  else {
+    parts.push(P(cyl(r + 0.016, r + 0.013, 0.15, 10), s.top, [0, -0.085, 0])); // aadhi baanh
+    parts.push(P(cap(r, 0.2, 8), s.skin, [0, -0.17, 0]));
+    if (b > 0.4) parts.push(P(sph(r * 0.95, 8, 6), s.skin, [0, -0.19, -0.018], [0, 0, 0], [1, 1.3, 1])); // bicep
+  }
+  return merge(parts);
+}
 function foreArmGeo(s) {
-  const c = sleeveFull(s.outfit) ? s.top : s.skin;
-  const b = s.buff || 0;
-  return merge([P(cap(0.044 + b * 0.009, 0.2, 8), c, [0, -0.13, 0]), P(sph(0.047, 8, 6), s.skin, [0, -0.28, -0.005], [0, 0, 0], [0.8, 1.1, 0.7])]);
+  const full = sleeveFull(s.outfit), c = full ? s.top : s.skin;
+  const b = s.buff || 0, r = (s.female ? 0.038 : 0.044) + b * 0.009;
+  const parts = [
+    P(cyl(r * 1.05, r * 0.78, 0.24, 8), c, [0, -0.12, 0]),
+    P(sph(r * 1.02, 8, 6), c, [0, 0, 0]), // kohni
+  ];
+  if (full) parts.push(P(cyl(r * 0.92, r * 0.92, 0.03, 8), darker(s.top, 0.85), [0, -0.235, 0])); // cuff
+  // haath: hatheli + ungliyan + angootha (gola nahi)
+  parts.push(P(box(0.07, 0.075, 0.032), s.skin, [0, -0.29, -0.006]));
+  parts.push(P(box(0.066, 0.055, 0.028), s.skin, [0, -0.345, -0.016], [-0.35, 0, 0]));
+  parts.push(P(cap(0.013, 0.035, 5), s.skin, [0.035, -0.29, -0.028], [-0.4, 0, -0.5]));
+  return merge(parts);
 }
 function thighGeo(s) {
-  const c = s.outfit === 'saree' || s.outfit === 'lungi' ? s.bottom : s.bottom;
-  return merge([P(cap(0.072, 0.32, 8), c, [0, -0.22, 0])]);
+  const b = s.buff || 0;
+  return merge([
+    P(sph(0.085 + b * 0.01, 10, 8), s.bottom, [0, -0.02, 0]),
+    P(cyl(0.083 + b * 0.01, 0.062, 0.42, 10), s.bottom, [0, -0.22, 0]),
+    P(sph(0.064, 8, 6), s.bottom, [0, -0.43, 0]), // ghutna
+  ]);
 }
 function shinGeo(s) {
   const lower = s.outfit === 'lungi' || s.outfit === 'frock' || (s.kid && s.outfit === 'shirt') ? s.skin : s.bottom;
-  const shoe = s.outfit === 'police' ? 0x111111 : s.female ? 0x7a3a20 : 0x2a1a10;
-  return merge([P(cap(0.06, 0.32, 8), lower, [0, -0.21, 0]), P(box(0.1, 0.07, 0.24), shoe, [0, -0.44, -0.05])]);
+  return merge([
+    P(cyl(0.06, 0.045, 0.4, 10), lower, [0, -0.2, 0]),
+    P(sph(0.055, 8, 6), lower, [0, -0.13, 0.018], [0, 0, 0], [1, 1.6, 1]), // pindli
+  ]);
+}
+// takhne se neeche: joota / chappal — alag hissa taaki pair mude
+function footGeo(s) {
+  const parts = [];
+  if (s.outfit === 'kurta' || s.outfit === 'lungi' || (s.female && !s.kid)) {
+    // chappal + nanga pair
+    parts.push(P(box(0.095, 0.02, 0.25), s.female ? 0x8a3a20 : 0x3a2a1a, [0, -0.06, -0.05]));
+    parts.push(P(box(0.08, 0.045, 0.2), s.skin, [0, -0.03, -0.05]));
+    parts.push(P(box(0.088, 0.012, 0.02), s.female ? 0xffc83d : 0x5a3a20, [0, -0.01, -0.09]));
+  } else {
+    const shoe = s.outfit === 'police' ? 0x111111 : s.hero ? 0x5a2e14 : 0x2a1a10;
+    parts.push(P(box(0.105, 0.03, 0.26), 0x151010, [0, -0.058, -0.05])); // sole
+    parts.push(P(box(0.095, 0.06, 0.2), shoe, [0, -0.02, -0.02]));
+    parts.push(P(sph(0.05, 8, 6), shoe, [0, -0.03, -0.13], [0, 0, 0], [0.95, 0.65, 1.1])); // panja
+  }
+  return merge(parts);
 }
 
 // ---------------- the human ----------------
@@ -185,6 +262,7 @@ export function makeHuman(o = {}) {
     stache: o.stache ?? (!female && !kid && Math.random() < 0.55),
     buff: o.buff ?? (!female && !kid && !o.old ? 0.5 + Math.random() * 0.5 : 0),
     beard: o.beard ?? false, hat: o.hat ?? null, shades: o.shades ?? false, print: o.print ?? null, dupatta: o.dupatta, capColor: o.capColor,
+    old: !!o.old, hero: !!o.hero, inner: o.inner,
   };
   if (o.old) { s.hair = 0xd4d4d4; if (!female && Math.random() < 0.5) s.hairStyle = 'bald'; }
   if (s.outfit === 'tshirt' && !s.print && Math.random() < 0.5) s.print = pick([0xffd23f, 0xff3d7f, 0x2ef2ff, 0xffffff]);
@@ -199,7 +277,7 @@ export function makeHuman(o = {}) {
   meshes.head = mk(headGeo(s), headPivot);
   meshes.torso = mk(torsoGeo(s), spine);
   meshes.pelvis = mk(pelvisGeo(s), hips);
-  const ua = upperArmGeo(s), fa = foreArmGeo(s), th = thighGeo(s), sh = shinGeo(s);
+  const ua = upperArmGeo(s), fa = foreArmGeo(s), th = thighGeo(s), sh = shinGeo(s), ft = footGeo(s);
   const limbs = {};
   for (const side of [-1, 1]) {
     const k = side < 0 ? 'L' : 'R';
@@ -207,10 +285,15 @@ export function makeHuman(o = {}) {
     const el = new THREE.Group(); el.position.y = -0.31; arm.add(el);
     const leg = new THREE.Group(); leg.position.set(side * 0.095, 0, 0); hips.add(leg);
     const kn = new THREE.Group(); kn.position.y = -0.45; leg.add(kn);
+    const an = new THREE.Group(); an.position.y = -0.43; kn.add(an); // takhna
     meshes['ua' + k] = mk(ua, arm); meshes['fa' + k] = mk(fa, el);
-    meshes['th' + k] = mk(th, leg); meshes['sh' + k] = mk(sh, kn);
-    limbs['arm' + k] = arm; limbs['el' + k] = el; limbs['leg' + k] = leg; limbs['kn' + k] = kn;
+    meshes['th' + k] = mk(th, leg); meshes['sh' + k] = mk(sh, kn); meshes['ft' + k] = mk(ft, an);
+    limbs['arm' + k] = arm; limbs['el' + k] = el; limbs['leg' + k] = leg; limbs['kn' + k] = kn; limbs['an' + k] = an;
   }
+  // ⌚ hero ki ghadi (baayein haath)
+  const watch = new THREE.Mesh(merge([P(cyl(0.05, 0.05, 0.03, 10), 0x1a1a1a, [0, -0.225, 0]), P(cyl(0.022, 0.022, 0.012, 10), 0xffc83d, [0, -0.225, -0.048], [Math.PI / 2, 0, 0])]), HUMAN_MAT);
+  limbs.elL.add(watch);
+  watch.visible = !!s.hero && !sleeveFull(s.outfit);
   const hand = new THREE.Object3D(); hand.position.set(0, -0.3, -0.02); limbs.elR.add(hand);
   const handL = new THREE.Object3D(); handL.position.set(0, -0.3, -0.02); limbs.elL.add(handL);
   if (kid) { root.scale.setScalar(0.62); headPivot.scale.setScalar(1.28); }
@@ -218,15 +301,17 @@ export function makeHuman(o = {}) {
 
   const h = {
     spec: s, root, hips, spine, headPivot, hand, handL, meshes, ...limbs,
-    aimPitch: 0, action: 'idle', at: 0, phase: Math.random() * 10, speed: 1.3, look: 0, lookX: 0, held: null, rate: 10,
+    aimPitch: 0, action: 'idle', at: 0, phase: Math.random() * 10, speed: 1.3, mspeed: 0, turn: 0, lean: 0, look: 0, lookX: 0, held: null, rate: 10,
     cur: { ...NEUTRAL }, tgt: { ...NEUTRAL },
   };
   h.rebuild = () => {
     const old = new Set(Object.values(meshes).map((m) => m.geometry));
     meshes.head.geometry = headGeo(s); meshes.torso.geometry = torsoGeo(s); meshes.pelvis.geometry = pelvisGeo(s);
-    const a = upperArmGeo(s), f = foreArmGeo(s), t = thighGeo(s), sh2 = shinGeo(s);
+    const a = upperArmGeo(s), f = foreArmGeo(s), t = thighGeo(s), sh2 = shinGeo(s), f2 = footGeo(s);
     meshes.uaL.geometry = meshes.uaR.geometry = a; meshes.faL.geometry = meshes.faR.geometry = f;
     meshes.thL.geometry = meshes.thR.geometry = t; meshes.shL.geometry = meshes.shR.geometry = sh2;
+    meshes.ftL.geometry = meshes.ftR.geometry = f2;
+    watch.visible = !!s.hero && !sleeveFull(s.outfit);
     old.forEach((g) => g.dispose());
   };
   return h;
@@ -243,42 +328,90 @@ export function setAction(h, a) {
   if (h.action !== a) { h.action = a; h.at = 0; }
 }
 
-const NEUTRAL = { hy: 0.95, sx: 0, sy: 0, sz: 0, hdx: 0, hdy: 0, aLx: 0, aLz: -0.08, aRx: 0, aRz: 0.08, eL: 0.15, eR: 0.15, lL: 0, lR: 0, kL: 0, kR: 0 };
+const NEUTRAL = { hy: 0.95, sx: 0, sy: 0, sz: 0, hdx: 0, hdy: 0, aLx: 0, aLz: -0.08, aRx: 0, aRz: 0.08, eL: 0.15, eR: 0.15, lL: 0, lR: 0, kL: 0, kR: 0, hry: 0, hrz: 0, hpx: 0, fL: 0, fR: 0, lzL: 0, lzR: 0 };
 const KEYS = Object.keys(NEUTRAL);
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
+const clampN = (x, a, b) => Math.max(a, Math.min(b, x));
+const smooth = (x) => x * x * (3 - 2 * x);
+
+// pair zameen pe sapaat rahe (takhna ghutne/kamar ki ulti taraf mude)
+function flatFeet(T, toeL = 0, toeR = 0) { T.fL = -(T.lL + T.kL) + toeL; T.fR = -(T.lR + T.kR) + toeR; }
 
 function pose(h, t, dt) {
-  const T = h.tgt;
+  const T = h.tgt, s0 = h.spec;
   Object.assign(T, NEUTRAL);
   T.hdy = h.look; T.hdx = h.lookX;
   const ph = h.phase;
+  const fem = s0.female && !s0.kid, old = s0.old, buff = s0.buff || 0;
   let rate = 10;
   switch (h.action) {
-    case 'idle':
-      T.sx = Math.sin(t * 1.5 + ph) * 0.02;
-      T.aLx = Math.sin(t * 1.1 + ph) * 0.05; T.aRx = -T.aLx;
+    case 'idle': {
+      // saans + vazan ek pair se doosre pe + idhar udhar dekhna — putla nahi, zinda insaan
+      const br = Math.sin(t * 1.7 + ph);
+      T.sx = br * 0.012 + (old ? -0.16 : 0);
+      const w = smooth(clamp01(Math.sin(t * 0.33 + ph) * 1.6 * 0.5 + 0.5)) * 2 - 1; // -1..1
+      T.hpx = w * 0.03; T.hrz = -w * 0.035; T.sz = w * 0.03;
+      T.kL = w > 0 ? -0.18 * w : 0; T.kR = w < 0 ? 0.18 * w : 0;
+      T.lL = -T.kL * 0.45; T.lR = -T.kR * 0.45;
+      T.lzL = -0.05; T.lzR = 0.05;
+      T.aLz = -0.1 - buff * 0.1 - br * 0.01; T.aRz = 0.1 + buff * 0.1 + br * 0.01;
+      T.aLx = 0.04 + Math.sin(t * 1.1 + ph) * 0.03; T.aRx = 0.04 - Math.sin(t * 1.1 + ph) * 0.03;
+      T.eL = T.eR = 0.22 + br * 0.02;
+      // har kuch second mein nayi taraf nazar
+      h.idleT = (h.idleT ?? Math.random() * 3) - dt;
+      if (h.idleT <= 0) { h.idleT = 2.5 + Math.random() * 4; h.idleLook = Math.random() < 0.35 ? 0 : (Math.random() - 0.5) * 1.1; h.idleTilt = (Math.random() - 0.4) * 0.15; }
+      T.hdy += h.idleLook || 0; T.hdx += h.idleTilt || 0;
+      flatFeet(T);
+      rate = 6;
       break;
+    }
     case 'walk': case 'run': {
       const run = h.action === 'run';
-      h.phase += dt * (run ? 10.5 : 6.2 * Math.max(0.6, h.speed / 1.4));
-      const p = h.phase, s = Math.sin(p), amp = run ? 0.8 : 0.48;
+      // asli raftaar ke hisaab se kadam — pair zameen pe fisle nahi
+      const sp = run ? clampN(h.mspeed, 3.2, 9.5) : clampN(h.mspeed, 0.7, 3.4);
+      h.phase += dt * sp * (run ? 2.45 : 3.75) * (old ? 1.15 : 1);
+      const p = h.phase, s = Math.sin(p), c = Math.cos(p);
+      const saree = s0.outfit === 'saree' || s0.outfit === 'lungi';
+      const amp = run ? (saree ? 0.5 : 0.82) : old ? 0.32 : saree ? 0.26 : 0.46;
       T.lL = s * amp; T.lR = -s * amp;
-      T.kL = -(0.1 + (run ? 1.1 : 0.65) * Math.max(0, Math.sin(p + 1.4)));
-      T.kR = -(0.1 + (run ? 1.1 : 0.65) * Math.max(0, Math.sin(p + 1.4 + Math.PI)));
-      T.aLx = -s * amp * 0.85; T.aRx = s * amp * 0.85;
-      T.eL = T.eR = run ? 1.3 : 0.28;
-      T.sx = run ? -0.22 : -0.03;
-      T.sy = s * 0.08;
-      T.hy = 0.95 - Math.abs(Math.cos(p)) * (run ? 0.06 : 0.025);
-      rate = 22;
+      // jo pair aage ja raha (swing) uska ghutna mude
+      T.kL = -(0.06 + (run ? 1.35 : 0.7) * Math.max(0, c) + (run ? 0.25 : 0.05) * Math.max(0, -s));
+      T.kR = -(0.06 + (run ? 1.35 : 0.7) * Math.max(0, -c) + (run ? 0.25 : 0.05) * Math.max(0, s));
+      // takhna: aage wale pair ki edi pehle, peeche wale ka panja dhakka de
+      flatFeet(T, s > 0 ? 0.22 * s : 0.75 * s * (run ? 1.1 : 0.8), -s > 0 ? -0.22 * s : -0.75 * s * (run ? 1.1 : 0.8));
+      // kamar ghoome, kandhe ulti taraf
+      T.hry = -s * (run ? 0.13 : fem ? 0.1 : 0.15);
+      T.sy = s * (run ? 0.3 : 0.22) - T.hry * 0.2;
+      // kamar ka jhoola (aurat mein zyada)
+      T.hrz = c * (run ? 0.04 : fem ? 0.085 : 0.045);
+      T.hpx = c * (fem ? 0.04 : 0.02);
+      T.sz = -T.hrz * 0.6;
+      // oonch-neech: kadam faile tab neeche, beech mein upar (pehle ulta tha!)
+      T.hy = run ? 0.9 + 0.06 * Math.abs(c) - 0.05 * s * s : 0.95 - 0.045 * s * s;
+      const armAmp = run ? 0.95 : fem ? 0.3 : old ? 0.18 : 0.42;
+      T.aLx = -s * armAmp; T.aRx = s * armAmp;
+      T.aLz = -0.1 - buff * 0.12 - (run ? 0.1 : 0); T.aRz = 0.1 + buff * 0.12 + (run ? 0.1 : 0);
+      T.eL = run ? 1.45 + 0.25 * Math.max(0, -s) : 0.22 + 0.4 * Math.max(0, -s);
+      T.eR = run ? 1.45 + 0.25 * Math.max(0, s) : 0.22 + 0.4 * Math.max(0, s);
+      T.sx = (run ? -0.24 - clampN((h.mspeed - 6) * 0.04, 0, 0.1) : -0.05) + (old ? -0.18 : 0);
+      // sar seedha rahe (kandhon ke saath na ghoome)
+      T.hdy -= T.hry + T.sy;
+      T.hdx += run ? 0.12 : 0.03;
+      rate = run ? 26 : 20;
+      // kadam ka event (aawaz / dhool)
+      const side = s >= 0 ? 1 : -1;
+      if (h.lastSide && side !== h.lastSide) h.step = (h.step || 0) + 1;
+      h.lastSide = side;
       break;
     }
     case 'sit': case 'cards':
       T.hy = 0.5; T.lL = T.lR = 1.5; T.kL = T.kR = -1.5; T.aLx = T.aRx = 0.45; T.eL = T.eR = 0.7;
+      T.sx = 0.02 * Math.sin(t * 1.6 + ph); T.fL = T.fR = 0;
       if (h.action === 'cards') { T.aRx = 0.9 + Math.sin(t * 2 + ph) * 0.15; T.eR = 1.2; T.aLx = 0.8; T.eL = 1.1; T.hdx = -0.25; }
       break;
     case 'drive':
       T.hy = 0.5; T.lL = T.lR = 1.45; T.kL = T.kR = -1.3; T.aLx = T.aRx = 1.05; T.eL = T.eR = 0.35; T.aLz = -0.18; T.aRz = 0.18;
+      T.sz = -(h.steer || 0) * 0.12; T.hdy -= (h.steer || 0) * 0.25;
       break;
     case 'eat': case 'drink': {
       const c = ((h.at * 0.75 + 0.2) % 1);
@@ -295,13 +428,14 @@ function pose(h, t, dt) {
       T.aRx = 0.4 + 0.3 * Math.sin(t * 3 + ph); T.eR = 0.8 + 0.4 * Math.sin(t * 4.3); T.aRz = 0.1;
       T.aLx = 0.25 + 0.2 * Math.sin(t * 2.3 + 1); T.eL = 0.6;
       T.hdy += 0.12 * Math.sin(t * 1.3); T.hdx += 0.05 * Math.sin(t * 5);
+      T.hpx = 0.02 * Math.sin(t * 0.5 + ph); T.hrz = -T.hpx;
       break;
     case 'wave':
-      T.aRz = 2.6; T.aRx = 0.2; T.eR = 0.4 + 0.45 * Math.sin(t * 11);
+      T.aRz = 2.6; T.aRx = 0.2; T.eR = 0.4 + 0.45 * Math.sin(t * 11); T.sz = -0.06; T.hpx = 0.02;
       break;
     case 'slap': {
       const k = clamp01(h.at / 0.32);
-      T.aRz = 1.5 - 1.9 * k; T.aRx = 0.5 + 0.9 * k; T.eR = 0.35; T.sy = 0.4 - 0.9 * k;
+      T.aRz = 1.5 - 1.9 * k; T.aRx = 0.5 + 0.9 * k; T.eR = 0.35; T.sy = 0.4 - 0.9 * k; T.hry = 0.15 - 0.3 * k;
       rate = 40;
       break;
     }
@@ -318,7 +452,8 @@ function pose(h, t, dt) {
     case 'bat': {
       const k = clamp01(h.swing ?? 0);
       T.aLx = T.aRx = 0.85; T.aLz = 0.35; T.aRz = -0.35; T.eL = T.eR = 0.55;
-      T.sy = 1.0 - 2.2 * k; T.sx = -0.15; T.lL = 0.15; T.lR = -0.15; T.kL = T.kR = -0.2;
+      T.sy = 1.0 - 2.2 * k; T.sx = -0.15; T.lL = 0.15; T.lR = -0.15; T.kL = T.kR = -0.2; T.hry = 0.3 - 0.6 * k;
+      flatFeet(T);
       rate = 25;
       break;
     }
@@ -333,16 +468,18 @@ function pose(h, t, dt) {
       break;
     case 'phone':
       T.aRx = 0.35; T.eR = 2.5; T.aRz = -0.25; T.hdy += 0.15 * Math.sin(t * 0.9); T.hdx = -0.05;
+      T.hpx = 0.025; T.hrz = -0.03; T.kL = -0.15; T.lL = 0.07; flatFeet(T);
       break;
     case 'clothes':
       T.aLx = T.aRx = 1.85 + 0.15 * Math.sin(t * 2 + ph); T.eL = T.eR = 0.2;
       break;
     case 'dance': {
       const b = t * 6.5 + ph, sb = Math.sin(b);
-      T.sz = 0.18 * sb; T.sy = 0.15 * Math.sin(b * 0.5);
+      T.sz = 0.18 * sb; T.sy = 0.15 * Math.sin(b * 0.5); T.hry = -0.2 * Math.sin(b * 0.5); T.hpx = 0.06 * sb; T.hrz = -0.08 * sb;
       T.aLz = -2.2 + 0.5 * sb; T.aRz = 2.2 + 0.5 * sb; T.eL = 0.5 + 0.4 * sb; T.eR = 0.5 - 0.4 * sb;
       T.lL = 0.25 * Math.max(0, sb); T.lR = 0.25 * Math.max(0, -sb); T.kL = -0.5 * Math.max(0, sb); T.kR = -0.5 * Math.max(0, -sb);
       T.hy = 0.93 + 0.025 * Math.sin(b * 2); T.hdx = 0.1 * Math.sin(b);
+      flatFeet(T);
       rate = 18;
       break;
     }
@@ -361,23 +498,35 @@ function pose(h, t, dt) {
       T.lL = 0.3; T.kL = -0.4;
       break;
     case 'fall':
-      T.aLz = -1.3; T.aRz = 1.3; T.lL = 0.3; T.lR = -0.2; T.kL = -0.6;
+      T.aLz = -1.3; T.aRz = 1.3; T.lL = 0.3; T.lR = -0.2; T.kL = -0.6; T.fL = T.fR = -0.4;
       break;
     case 'hands':
       T.aLz = -0.35; T.aRz = 0.35; T.aLx = T.aRx = 0.2; T.eL = T.eR = 1.6;
       break;
     case 'point':
-      T.aRx = 1.5; T.eR = 0.05; T.hdx = 0;
+      T.aRx = 1.5; T.eR = 0.05; T.hdx = 0; T.sy = -0.12; T.hry = 0.06;
       break;
     case 'hug':
       T.aLx = T.aRx = 1.35; T.eL = T.eR = 1.25; T.aLz = 0.55; T.aRz = -0.55; T.hdy += 0.4; T.sx = -0.08;
       break;
-    case 'jump':
-      T.lL = 0.7; T.lR = 0.3; T.kL = -1.2; T.kR = -0.8; T.aLz = -0.9; T.aRz = 0.9; T.aLx = T.aRx = 0.4; T.sx = -0.1;
-      rate = 18;
+    case 'jump': {
+      // hawa mein: ek ghutna upar, haath santulan ke liye
+      const up = (h.vy ?? 0) > 0;
+      T.lL = up ? 0.9 : 0.5; T.lR = up ? 0.1 : 0.25; T.kL = up ? -1.4 : -0.7; T.kR = up ? -0.3 : -0.5;
+      T.aLz = -0.9; T.aRz = 0.9; T.aLx = T.aRx = up ? -0.3 : 0.5; T.eL = T.eR = 0.5; T.sx = up ? 0.05 : -0.12;
+      T.fL = 0.3; T.fR = -0.4;
+      rate = 16;
+      break;
+    }
+    case 'land':
+      // zameen pe girte hi jhatka — ghutne mude
+      T.hy = 0.74; T.lL = T.lR = 0.75; T.kL = T.kR = -1.35; T.sx = -0.32; T.aLx = T.aRx = 0.55; T.aLz = -0.35; T.aRz = 0.35; T.eL = T.eR = 0.6;
+      flatFeet(T);
+      rate = 40;
       break;
     case 'hurt':
       T.sx = 0.35; T.aLx = T.aRx = 0.9; T.eL = T.eR = 1.6; T.aLz = 0.3; T.aRz = -0.3; T.hdx = 0.3; T.kL = T.kR = -0.3;
+      flatFeet(T);
       rate = 25;
       break;
     default: break;
@@ -396,13 +545,15 @@ function pose(h, t, dt) {
       else T.hdx = 0.3 * kk;
       rate = Math.max(rate, 14);
     } else if (ov === 'punch') {
-      const k = clamp01(ot / 0.14), back = clamp01((ot - 0.2) / 0.2);
+      // poora sharir ghuma ke ghoonsa 👊
+      const k = clamp01(ot / 0.13), back = clamp01((ot - 0.2) / 0.22);
       const p = k * (1 - back);
-      T.aRx = 0.4 + 1.2 * p; T.eR = 1.8 - 1.75 * p; T.aRz = 0.05; T.sy = -0.5 * p; T.aLx = 0.9; T.eL = 1.8; T.aLz = 0.2;
-      rate = 40;
+      T.aRx = 0.4 + 1.25 * p; T.eR = 1.8 - 1.75 * p; T.aRz = 0.05; T.sy = 0.25 - 0.85 * p; T.hry = 0.1 - 0.3 * p; T.sx = -0.12 * p;
+      T.aLx = 0.9; T.eL = 1.9; T.aLz = 0.25; T.hdy = -T.sy * 0.6;
+      rate = 42;
     } else if (ov === 'swing') {
       const k = clamp01(ot / 0.3);
-      T.aRx = 2.6 - 1.9 * k; T.eR = 0.3; T.aRz = -0.3 + 0.6 * k; T.sy = 0.5 - 1.1 * k; T.aLx = 2.2 - 1.6 * k; T.eL = 0.5; T.aLz = 0.5;
+      T.aRx = 2.6 - 1.9 * k; T.eR = 0.3; T.aRz = -0.3 + 0.6 * k; T.sy = 0.5 - 1.1 * k; T.hry = 0.2 - 0.4 * k; T.aLx = 2.2 - 1.6 * k; T.eL = 0.5; T.aLz = 0.5;
       rate = 35;
     } else if (ov === 'smoke') {
       const k = Math.sin(Math.min(1, ot / 1.6) * Math.PI);
@@ -426,19 +577,38 @@ export function setOverlay(h, ov) {
   if (h.overlay !== ov) { h.overlay = ov; h.ot = 0; }
 }
 
+const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 export function updateHuman(h, dt, t) {
   h.at += dt;
+  // asli raftaar + mudne ki raftaar naapo (kadam aur jhukaav isi se)
+  const r = h.root.position, ry = h.root.rotation.y;
+  if (h._px !== undefined && dt > 0) {
+    const v = Math.min(10, Math.hypot(r.x - h._px, r.z - h._pz) / dt);
+    h.mspeed += (v - h.mspeed) * Math.min(1, dt * 8);
+    const yr = wrapA(ry - h._ry) / dt;
+    h.turn += (clampN(yr, -6, 6) - h.turn) * Math.min(1, dt * 6);
+  }
+  h._px = r.x; h._pz = r.z; h._ry = ry;
   const rate = pose(h, t, dt);
   const a = 1 - Math.exp(-dt * rate);
   const C = h.cur, T = h.tgt;
   for (const k of KEYS) C[k] += (T[k] - C[k]) * a;
-  h.hips.position.y = C.hy;
+  // mod pe andar ki taraf jhuko (cycle/bike jaisa)
+  const moving = h.action === 'walk' || h.action === 'run';
+  const leanT = moving ? clampN(h.turn * h.mspeed * 0.022, -0.28, 0.28) : 0;
+  h.lean += (leanT - h.lean) * Math.min(1, dt * 8);
+  h.hips.position.set(C.hpx, C.hy, 0);
+  h.hips.rotation.set(0, C.hry, C.hrz + h.lean);
   h.spine.rotation.set(C.sx, C.sy, C.sz);
-  h.headPivot.rotation.set(C.hdx, C.hdy, 0);
+  h.headPivot.rotation.set(C.hdx, C.hdy, -h.lean * 0.5);
   h.armL.rotation.set(C.aLx, 0, C.aLz); h.armR.rotation.set(C.aRx, 0, C.aRz);
   h.elL.rotation.x = C.eL; h.elR.rotation.x = C.eR;
-  h.legL.rotation.x = C.lL; h.legR.rotation.x = C.lR;
+  h.legL.rotation.set(C.lL, 0, C.lzL); h.legR.rotation.set(C.lR, 0, C.lzR);
   h.knL.rotation.x = C.kL; h.knR.rotation.x = C.kR;
+  h.anL.rotation.x = C.fL; h.anR.rotation.x = C.fR;
+  // saans: seena halka phoole
+  const br = 1 + Math.sin(t * (moving ? 3.2 : 1.7) + h.phase * 0.1) * (h.action === 'run' ? 0.02 : 0.01);
+  h.meshes.torso.scale.set(1, br, 1 + (br - 1) * 1.5);
 }
 
 // ---------------- haath mein saaman ----------------

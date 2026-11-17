@@ -1694,6 +1694,7 @@ function updateCar(dt) {
   }
   throttle = THREE.MathUtils.clamp(throttle, -1, 1);
   steer = THREE.MathUtils.clamp(steer, -1, 1);
+  me.steer = (me.steer || 0) + (steer - (me.steer || 0)) * Math.min(1, dt * 6); // driver handle ke saath jhuke
   const t = state.t;
   const max = (car.max || 15) * (t < state.turboUntil ? 1.8 : 1) * (t < state.sugarUntil ? 1.25 : 1);
   if (throttle) car.speed += throttle * 22 * dt;
@@ -1820,17 +1821,33 @@ function updateWalker(dt) {
   if (walker.y > 0 || walker.vy > 0) {
     walker.vy -= 15 * dt;
     walker.y = Math.max(0, walker.y + walker.vy * dt);
-    if (walker.y <= 0 && walker.vy < 0) { walker.vy = 0; walker.y = 0; noise(0.05, 0.08, 300); }
+    if (walker.y <= 0 && walker.vy < 0) {
+      walker.vy = 0; walker.y = 0; noise(0.07, 0.14, 250);
+      state.landUntil = t + 0.2;
+      for (let i = 0; i < 5; i++) puff(walker.pos.x, 0.08, walker.pos.z, { color: 0xb8a080, size: 0.55, life: 0.6, up: 0.35, spread: 1.2 });
+    }
     else setAction(me, 'jump');
   }
+  me.vy = walker.vy;
+  if (t < (state.landUntil || 0) && walker.y <= 0) setAction(me, 'land');
   if (t < state.hurtUntil) setAction(me, 'hurt');
   if (state.pose) setAction(me, state.pose);
+  // 👣 kadmon ki aawaz + daudte waqt dhool
+  if (me.step !== lastStep) {
+    lastStep = me.step;
+    const runS = me.action === 'run';
+    if (walker.y <= 0.01) {
+      noise(0.035, runS ? 0.05 : 0.025, runS ? 1400 : 2200);
+      if (runS) puff(walker.pos.x, 0.06, walker.pos.z, { color: 0xb8a080, size: 0.42, life: 0.5, up: 0.3, spread: 0.35 });
+    }
+  }
   if (weapons.aiming) { walker.heading = aimYaw; footYaw = aimYaw; me.aimPitch = aimPitch; }
   me.look *= 0.92;
   me.root.position.set(walker.pos.x, groundY() + walker.y, walker.pos.z);
   me.root.rotation.y = walker.heading;
   if (t > state.balloonUntil && me.held && state.balloonUntil > 0) { hold(me, null); state.balloonUntil = 0; }
 }
+let lastStep = 0;
 function spit() {
   const fx = -Math.sin(walker.heading), fz = -Math.cos(walker.heading);
   const m = new THREE.Mesh(new THREE.CircleGeometry(0.35, 12), new THREE.MeshBasicMaterial({ color: 0x9a0a10, transparent: true, opacity: 0.85 }));
@@ -1898,6 +1915,11 @@ function updateCamera(dt, lv) {
   camera.position.lerp(camTarget, 1 - Math.exp(-dt * (state.mode === 'drive' ? 4 : 7)));
   camLook.lerp(tmp, 1 - Math.exp(-dt * 8));
   camera.position.y += lv.bass * (state.mode === 'drive' ? 0.12 : 0.03);
+  if (state.mode === 'foot' && !weapons.aiming && (me.action === 'run' || me.action === 'walk')) {
+    const runC = me.action === 'run';
+    camera.position.y += Math.sin(me.phase * 2) * (runC ? 0.045 : 0.012);
+    camera.position.x += Math.cos(me.phase) * (runC ? 0.03 : 0.006);
+  }
   if (t < state.fireUntil || t < state.stunUntil) {
     camera.position.x += (Math.random() - 0.5) * 0.3;
     camera.position.y += (Math.random() - 0.5) * 0.3;
@@ -1906,7 +1928,7 @@ function updateCamera(dt, lv) {
   if (t < state.champiUntil) camera.rotation.z += Math.sin(t * 6) * 0.15;
   // gaana baje to camera beat pe saans le (cinematic)
   const baseFov = innerWidth < innerHeight ? 72 : 60;
-  const want = baseFov + (music.playing ? lv.bass * 2.2 : 0) + (state.mode === 'drive' ? Math.min(6, Math.abs(car.speed) * 0.3) : 0);
+  const want = baseFov + (music.playing ? lv.bass * 2.2 : 0) + (state.mode === 'drive' ? Math.min(6, Math.abs(car.speed) * 0.3) : me.action === 'run' ? Math.min(7, walker.speed * 0.9) : 0);
   camera.fov += (want - camera.fov) * Math.min(1, dt * 6);
   if (weapons.aiming && weapons.cur === 'sniper') camera.fov = 11; else if (weapons.aiming) camera.fov = Math.min(camera.fov, 50);
   camera.updateProjectionMatrix();
@@ -2183,7 +2205,7 @@ async function boot() {
   rick.position.copy(car.pos);
   ownCar = Object.assign(car, { g: rick, wheels: rick.userData.wheels, seat: new THREE.Vector3(0, 0.72, -0.5), passenger: new THREE.Vector3(0.45, 0.42, 0.95), kind: 'auto', max: 15, radius: 1.0, len: 3.4, own: true });
   traffic = buildTraffic(scene, { isTouch });
-  me = makeHuman({ outfit: 'shirt', top: 0x2f5fa8, bottom: 0x1f3a6a, hairStyle: 'short', stache: true, skin: 0xb9774a, hair: 0x111111 });
+  me = makeHuman({ outfit: 'shirt', top: 0x2f5fa8, bottom: 0x1f3a6a, hairStyle: 'short', stache: true, skin: 0xb9774a, hair: 0x111111, hero: true, buff: 1 });
   rick.add(me.root);
   me.root.position.set(0, 0.72, -0.5);
   setAction(me, 'drive');

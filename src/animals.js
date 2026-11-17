@@ -87,7 +87,31 @@ export function buildAnimals(scene, walkable) {
   const rickCat = makeCat(0xff9a3d);
   rickCat.g.visible = false;
 
-  function update(t, dt, player, st, night) {
+  // gaadi ke dabbe (oriented box) se kutte ko bahar dhakelo — ab aar-paar nahi jaayega
+  function pushOutOfVehicles(d, vehicles) {
+    if (!vehicles) return false;
+    let hit = false;
+    for (const v of vehicles) {
+      if (!v || !v.pos) continue;
+      const dx = d.x - v.pos.x, dz = d.z - v.pos.z;
+      if (dx * dx + dz * dz > 49) continue;
+      const h = v.heading || 0, c = Math.cos(h), s = Math.sin(h);
+      // world → vehicle local (front = -Z)
+      const lx = dx * c - dz * s, lz = dx * s + dz * c;
+      const hw = (v.radius || 1) * 1.1 + 0.32, hl = (v.len || 3.4) / 2 + 0.5;
+      if (Math.abs(lx) >= hw || Math.abs(lz) >= hl) continue;
+      const px = hw - Math.abs(lx), pz = hl - Math.abs(lz);
+      let nlx = lx, nlz = lz;
+      if (px < pz) nlx = Math.sign(lx || 1) * hw; else nlz = Math.sign(lz || 1) * hl;
+      // local → world
+      d.x = v.pos.x + nlx * c + nlz * s;
+      d.z = v.pos.z - nlx * s + nlz * c;
+      hit = true;
+    }
+    return hit;
+  }
+
+  function update(t, dt, player, st, night, vehicles) {
     let ev = null;
     for (const d of dogs) {
       const dist = Math.hypot(player.pos.x - d.x, player.pos.z - d.z);
@@ -129,6 +153,8 @@ export function buildAnimals(scene, walkable) {
         const nx = d.x - Math.sin(d.h) * speed * dt, nz = d.z - Math.cos(d.h) * speed * dt;
         if (d.mode === 'friend' || walkable(nx, nz)) { d.x = nx; d.z = nz; } else if (d.mode === 'wander') d.timer = 0;
       }
+      // chalti gaadi se bhi takkar — kutta side ho jaata hai, andar nahi ghusta
+      if (pushOutOfVehicles(d, vehicles) && d.mode === 'wander') d.timer = 0;
       d.spd += (speed - d.spd) * Math.min(1, dt * 8);
       const run = d.spd > 5;
       d.g.position.set(d.x, run ? Math.abs(Math.sin(t * 16)) * 0.12 : 0, d.z);

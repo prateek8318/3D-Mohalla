@@ -48,7 +48,8 @@ export function createUI3D(camera) {
       let el = labels.get(it.key);
       if (!el) { el = document.createElement('div'); el.className = 'lbl'; layer.appendChild(el); labels.set(it.key, el); }
       if (el.dataset.t !== it.text) { el.textContent = it.text; el.dataset.t = it.text; }
-      el.classList.toggle('hot', !!it.hot);
+      const cn = 'lbl' + (it.hot ? ' hot' : '') + (it.cls ? ' ' + it.cls : '');
+      if (el.className !== cn) el.className = cn;
       place(el, it, it.y);
     }
     for (const [k, el] of labels) if (!seen.has(k)) { el.remove(); labels.delete(k); }

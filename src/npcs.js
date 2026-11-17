@@ -333,7 +333,7 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
       // gaadi se takkar
       if (!n.fall && (n.type === 'walker' || n.type === 'thief' || n.type === 'keeper' && n.info.id === 'golgappa') && pl.mode === 'drive' && Math.abs(pl.speed) > 4.5) {
         const dd = Math.hypot(n.x - px, n.z - pz);
-        if (dd < 1.7 && !n.gf) {
+        if (dd < 1.7 && !n.girl?.gf) {
           n.fall = 3.8;
           const sp = Math.abs(pl.speed) * Math.sign(pl.speed);
           n.fv = { x: -Math.sin(pl.heading) * sp * 0.6, z: -Math.cos(pl.heading) * sp * 0.6, y: 2.5 + Math.abs(sp) * 0.18 };
@@ -402,26 +402,50 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
             setAction(n.h, 'walk');
             break;
           }
-          if (n.gf) {
+          if (n.girl?.gf) {
+            // BUG FIX: pehle `n.gf` check hota tha (jo kabhi set hi nahi hota) — isliye wo apni marzi se ghoomti thi
+            n.talking = false; n.pause = 0; n.cross = null; n.backToLane = false; n.flee = 0;
+            if (n.spot) { n.spot.busy = false; n.spot = null; }
+            const dP = Math.hypot(n.x - px, n.z - pz);
             if (pl.mode === 'drive') {
-              if (Math.hypot(n.x - px, n.z - pz) < 9) {
+              if (dP < 9) {
                 n.riding = true;
                 ctx.vehG.add(n.h.root);
-                n.h.root.position.copy(ctx.passenger);
+                n.h.root.position.copy(ctx.gfSeat || ctx.passenger);
                 n.h.root.rotation.set(0, 0, 0);
                 setAction(n.h, 'sit');
                 ev.push({ type: 'ride', n });
                 continue;
               }
             }
+            // bahut peeche reh gayi (teleport / gaadi se aage nikal gaye) — chupke se peeche aa jaaye
+            if (dP > 35) {
+              for (const k of [1.6, 2.4, 3.2]) {
+                const bx = px + Math.sin(pl.heading) * k, bz = pz + Math.cos(pl.heading) * k;
+                if (footable(bx, bz)) { n.x = bx; n.z = bz; break; }
+              }
+            }
+            // player ke theek peeche, thoda side mein
+            const back = Math.sin(pl.heading), backZ = Math.cos(pl.heading);
             const rx = Math.cos(pl.heading), rz = -Math.sin(pl.heading);
-            const tx = px + rx * 0.9 + Math.sin(pl.heading) * 0.9, tz = pz + rz * 0.9 + Math.cos(pl.heading) * 0.9;
+            let tx = px + back * 1.3 + rx * 0.55, tz = pz + backZ * 1.3 + rz * 0.55;
+            if (!footable(tx, tz)) { tx = px + back * 1.2; tz = pz + backZ * 1.2; }
             const d = Math.hypot(tx - n.x, tz - n.z);
-            if (d > 0.4) { moveToward(n, tx, tz, d > 4 ? 6 : Math.min(3.2, d * 2), dt); setAction(n.h, d > 4 ? 'run' : 'walk'); n.h.speed = 1.4; }
-            else { setAction(n.h, ctx.party ? 'dance' : 'idle'); n.heading += wrap(pl.heading - n.heading) * Math.min(1, dt * 3); }
+            const pSpeed = Math.abs(pl.speed || 0);
+            if (d > 0.35) {
+              const sp = d > 5 ? 7.5 : Math.max(pSpeed * 1.05, Math.min(6.5, d * 2.4));
+              moveToward(n, tx, tz, sp, dt);
+              // deewar mein phans gayi to seedha player ki taraf
+              if (d > 3 && Math.hypot(tx - n.x, tz - n.z) >= d - 0.001) moveToward(n, px, pz, sp, dt, false);
+              setAction(n.h, sp > 4 ? 'run' : 'walk');
+              n.h.speed = sp;
+            } else {
+              setAction(n.h, ctx.party ? 'dance' : 'idle');
+              n.heading += wrap(pl.heading - n.heading) * Math.min(1, dt * 3);
+            }
             break;
           }
-          if (n.slapT > 0) { n.slapT -= dt; n.heading = headingTo(px - n.x, pz - n.z); break; }
+          if (n.slapT > 0) { n.slapT -= dt; if (d0(n) > 0.95 && pl.mode === 'foot') moveToward(n, px, pz, 4.5, dt); n.heading = headingTo(px - n.x, pz - n.z); break; }
           if (n.talking) { n.heading += wrap(headingTo(px - n.x, pz - n.z) - n.heading) * Math.min(1, dt * 6); if (n.h.action !== 'slap') setAction(n.h, 'talk'); break; }
           const nearP = Math.hypot(n.x - px, n.z - pz);
           if (ctx.party && n.canDance && nearP < 26 && !n.cop) { setAction(n.h, 'dance'); lookAtPlayer(n, px, pz, 20); break; }
@@ -518,6 +542,14 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
         }
         case 'keeper': {
           if (n.salon) break;
+          // saaman haath mein pakda rahe hain 🤲
+          if (n.giveT > 0) {
+            n.giveT -= dt;
+            setAction(n.h, 'point');
+            lookAtPlayer(n, px, pz, 14);
+            if (n.giveT <= 0) hold(n.h, n.id === 'barber' ? itemMesh('scissors') : n.id === 'chai' ? itemMesh('cup') : null);
+            break;
+          }
           if (ctx.activeShop === n.id) { setAction(n.h, ctx.slapKeeper === n.id ? 'point' : 'talk'); lookAtPlayer(n, px, pz, 12); break; }
           const d = Math.hypot(n.x - px, n.z - pz);
           if (d < 7 && !n.near) { n.near = true; n.waveT = 1.6; }
@@ -757,5 +789,13 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
     }
     return out;
   }
-  return { npcs, update, nearestGirl, randomSidewalk, shootNpc, panic, spawnThief, remove, keepers, cops, jeep: J, salon, hitTest, knock, adoptWalker, girls: () => npcs.filter((n) => n.girl) };
+  function giveItem(id, mesh) {
+    const k = keepers[id];
+    if (!k) return null;
+    k.giveT = 1.2;
+    if (mesh) hold(k.h, itemMesh(mesh));
+    return k;
+  }
+
+  return { giveItem, npcs, update, nearestGirl, randomSidewalk, shootNpc, panic, spawnThief, remove, keepers, cops, jeep: J, salon, hitTest, knock, adoptWalker, girls: () => npcs.filter((n) => n.girl) };
 }

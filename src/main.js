@@ -103,14 +103,24 @@ function toast(msg, ms = 2600) {
   toastTimer = setTimeout(() => el.classList.remove('show'), ms);
 }
 function setMoney(v) {
+  const before = state.money;
   state.money = Math.max(0, Math.round(v));
+  // BUG FIX: pehle yahan loadGame() tha jo purana save padh ke paisa wapas reset kar deta tha
   try { localStorage.setItem('mohalla.money', String(state.money)); } catch { /* private mode */ }
-  loadGame();
+  if (started) saveGame();
   $('money').textContent = state.money;
   const w = document.querySelector('.wallet');
   w.classList.remove('bump');
   void w.offsetWidth;
   w.classList.add('bump');
+  const diff = state.money - before;
+  if (diff) {
+    const f = document.createElement('div');
+    f.className = 'moneyPop ' + (diff > 0 ? 'up' : 'down');
+    f.textContent = (diff > 0 ? '+₹' : '-₹') + Math.abs(diff);
+    w.appendChild(f);
+    setTimeout(() => f.remove(), 1400);
+  }
 }
 function flash(cls) {
   const f = $('flash');
@@ -179,6 +189,7 @@ let aimYaw = 0, aimPitch = 0, lastShotWanted = 0, lastHurt = -99;
 let car = { pos: new THREE.Vector3(0, 0, 80), heading: 0, speed: 0 };
 const walker = { pos: new THREE.Vector3(), heading: 0, speed: 0, y: 0, vy: 0 };
 const ctxPlayer = { pos: car.pos, heading: 0, speed: 0, mode: 'drive' };
+const GF_SEAT_AUTO = new THREE.Vector3(-0.45, 0.42, 0.95); // sawari daayein, girlfriend baayein
 
 // ---------- INPUT ----------
 const keys = {};
@@ -610,6 +621,23 @@ function shopOptions(def, trig) {
     return { n: it.n, p: it.p, d: extra, on: () => buy(def, it, trig) };
   });
 }
+// Khareedte hi popup band; dukaandaar saaman pakdaata hai, tumhare haath mein dikhta hai
+function shopReact(def, trig, line, { mesh, sub, cls = '' } = {}) {
+  closeSheets();
+  const kid = trig?.keeper?.id || def.id;
+  const kp = npcs.giveItem(kid, mesh);
+  const target = kp ? kp.h.root : { x: trig?.x ?? walker.pos.x, y: 0.4, z: trig?.z ?? walker.pos.z };
+  if (line) ui3d.bubble(target, line, cls, bubDur(line));
+  if (mesh && state.mode === 'foot') {
+    setTimeout(() => {
+      if (state.seq) return;
+      hold(me, itemMesh(mesh));
+      setOverlay(me, 'hold');
+      setTimeout(() => { if (!state.seq) { hold(me, state.weapon ? itemMesh(state.weapon) : null); setOverlay(me, state.weapon ? 'hold' : null); } }, 2400);
+    }, 650);
+  }
+  if (sub) toast(sub, 2400);
+}
 const BAGGABLE = (it) => it.kind === 'gift' || it.kind === 'kite' || it.kind === 'balloon' || it.kind === 'ittar' || (!it.kind && ['sugar', 'turbo', 'fire', 'full'].includes(it.fx));
 function buy(def, it, trig) {
   if (it.p > state.money) {
@@ -625,13 +653,13 @@ function buy(def, it, trig) {
     weapons.give(it.gun, g.ammo);
     weapons.equip(it.gun);
     state.weapon = null;
-    say(`${g.n} mil gaya! Right-click / 🎯 = nishana, Click / J / 🔫 = goli. 1-2-3 se badlo`);
+    shopReact(def, trig, line || 'Le bhai, sambhal ke chalana 😎', { sub: `${g.n} mil gaya! Right-click / 🎯 = nishana, Click / J / 🔫 = goli. 1-2-3 se badlo` });
     return;
   }
   if (it.kind === 'ammo') {
     if (!weapons.cur) { setMoney(state.money + it.p); say('Pehle bandook to haath mein lo! (1/2/3)'); return; }
     weapons.give(weapons.cur, Math.ceil(GUNS[weapons.cur].ammo / 2));
-    say(`📦 Goli bhar di — ${weapons.ammo()} goli`);
+    shopReact(def, trig, 'Ye lo goli 📦', { sub: `📦 Goli bhar di — ${weapons.ammo()} goli` });
     return;
   }
   if (it.kind === 'weapon') {
@@ -639,25 +667,27 @@ function buy(def, it, trig) {
     state.weapon = it.mesh;
     hold(me, itemMesh(it.mesh));
     setOverlay(me, 'hold');
-    say(`${it.n} haath mein! J (ya 👊) se maaro 💥`);
+    shopReact(def, trig, line || 'Le lo 💥', { sub: `${it.n} haath mein! J (ya 👊) se maaro 💥` });
     return;
   }
   if (!it.kind && ['sugar', 'turbo', 'fire', 'full'].includes(it.fx) && state.mode === 'foot') {
-    // khareeda aur turant khaana shuru 😋
-    closeSheets();
+    // khareeda → dukaandaar haath mein deta hai → turant khaana shuru 😋
+    const mesh = guessMesh(it);
+    shopReact(def, trig, line || pick(GENERIC[Lg]), { mesh: null });
+    npcs.giveItem(trig?.keeper?.id || def.id, mesh);
     if (state.seq?.type === 'eat') { addToBag(it); toast(X().added(it.n)); return; }
     cancelSeq();
-    startEat({ ...it, mesh: guessMesh(it) });
-    toast(`${it.n} — chalte chalte khao 😋`, 1600);
+    setTimeout(() => { if (!state.seq && state.mode === 'foot') startEat({ ...it, mesh }); else addToBag(it); }, 600);
+    toast(`${it.n} mila — chalte chalte khao 😋  (-₹${it.p})`, 1800);
     return;
   }
   if (BAGGABLE(it)) {
     addToBag(it);
-    say(line || pick(GENERIC[Lg]), X().added(it.n) + ' — 🎒 (B) se nikaalo');
+    shopReact(def, trig, line || pick(GENERIC[Lg]), { mesh: it.mesh || guessMesh(it), sub: X().added(it.n) + ' — 🎒 (B) se nikaalo' });
     return;
   }
-  if (it.kind === 'shirt') { me.spec.top = it.color; me.spec.outfit = it.outfit || 'shirt'; me.rebuild(); state.styleAt = t; say(X().shirt); return; }
-  if (it.kind === 'shades') { me.spec.shades = true; me.rebuild(); state.styleAt = t; say(X().shades); return; }
+  if (it.kind === 'shirt') { me.spec.top = it.color; me.spec.outfit = it.outfit || 'shirt'; me.rebuild(); state.styleAt = t; shopReact(def, trig, X().shirt, { sub: `👕 ${it.n} pehen liya` }); flash('sugar'); return; }
+  if (it.kind === 'shades') { me.spec.shades = true; me.rebuild(); state.styleAt = t; shopReact(def, trig, X().shades, { sub: '😎 Chashma laga liya' }); return; }
   switch (it.fx) {
     case 'hair': case 'beard': case 'champi': case 'facial':
       if (trig?.keeper?.chair) return startSalon(it, trig.keeper);
@@ -707,7 +737,7 @@ function buy(def, it, trig) {
       toast(SCENES[Lg].room, 3500);
       return;
     case 'diya': world.releaseDiyas(10); break;
-    case 'shayari': say(pick(SHAYARI[Lg])); flash('love'); return;
+    case 'shayari': shopReact(def, trig, pick(SHAYARI[Lg]), { cls: 'love' }); flash('love'); return;
     case 'fortune': line = pick(FORTUNES[Lg]); break;
     case 'loveyog': {
       const gs = npcs.girls().filter((g) => !g.girl.gf);
@@ -720,8 +750,7 @@ function buy(def, it, trig) {
     case 'romance':
       state.romance = !state.romance;
       if (state.romance) flash('love');
-      toast(state.romance ? UI[Lg].romanceOn : UI[Lg].romanceOff);
-      renderOptions(shopOptions(def, trig));
+      shopReact(def, trig, line, { sub: state.romance ? UI[Lg].romanceOn : UI[Lg].romanceOff });
       return;
     case 'music':
       if (line) toast(line);
@@ -729,8 +758,8 @@ function buy(def, it, trig) {
       return;
     default: break;
   }
-  say(line || pick(GENERIC[Lg]));
-  if (it.p) toast(UI[Lg].bought(it.n, it.p), 1800);
+  const foodish = !it.kind && !['call', 'retro', 'bell', 'aarti', 'wish', 'diya', 'fortune', 'loveyog', 'polish', 'dogfood', 'catfood', 'eid'].includes(it.fx);
+  shopReact(def, trig, line || pick(GENERIC[Lg]), { mesh: foodish ? guessMesh(it) : it.fx === 'dogfood' || it.fx === 'catfood' ? 'biscuit' : null, sub: it.p ? UI[Lg].bought(it.n, it.p) : '' });
 }
 
 // ---------- SALON ✂️ ----------
@@ -766,15 +795,34 @@ function girlLine(key) {
   if (key === 'slap') return gaali('girlSlap') || pick(GIRL[L()].slap);
   return pick(GIRL[L()][key]);
 }
+// Popup turant band — jawab duniya mein bubble ban ke dikhe, action aankhon ke saamne ho
+const bubDur = (txt) => Math.min(7, Math.max(2.8, (txt || '').length / 13));
+function meSay(text, cls = '') { ui3d.bubble(me.root, text, cls, bubDur(text)); }
+function girlReact(n, text, { cls = '', act = 'talk', sub } = {}) {
+  const dur = bubDur(text);
+  ui3d.bubble(n.h.root, text, cls, dur);
+  if (!n.girl.gf) { n.pause = dur + 0.5; n.pauseAct = act; n.faceTo = { x: walker.pos.x, z: walker.pos.z }; }
+  if (sub) toast(sub, 2600);
+}
+function handOver(n, mesh, after = 900) {
+  hold(me, itemMesh(mesh));
+  setOverlay(me, 'hold');
+  setTimeout(() => {
+    hold(me, state.weapon ? itemMesh(state.weapon) : null);
+    setOverlay(me, state.weapon ? 'hold' : null);
+    hold(n.h, itemMesh(mesh));
+    setTimeout(() => hold(n.h, null), 2600);
+  }, after);
+}
 function openGirl(n) {
   const g = n.girl;
   const opts = g.gf ? [
-    { n: '💞 Saath chalo', d: 'Tumhare peeche peeche', on: () => { say(GIRL[L()].already); } },
+    { n: '💞 Saath chalo', d: 'Tumhare peeche peeche', on: () => { closeSheets(); meSay('Chalo mere saath 😊'); setTimeout(() => girlReact(n, GIRL[L()].already, { cls: 'love' }), 700); } },
     { n: '🤗 Jhappi (hug)', on: () => runScene(hugScene(n)) },
     { n: '🌙 Ghat pe chalo', d: 'Filmy shaam', on: () => { closeSheets(); goGhatWith(n); } },
     { n: '🏨 Hotel date', d: 'Dinner / Dance', on: () => { closeSheets(); teleport({ x: hotel.center.x - 4, z: hotel.center.z + 4, h: 0 }); n.x = walker.pos.x + 1; n.z = walker.pos.z; toast('🏨 Hotel Raj Palace — Manager se dinner book karo 🕯️', 3000); } },
     { n: '🎁 Gift do', on: () => giveGift(n) },
-    { n: '💔 Breakup', cls: 'danger', on: () => { g.gf = false; g.affinity = 0; g.rejected = 2; say('Theek hai, jao! 😭💔'); } },
+    { n: '💔 Breakup', cls: 'danger', on: () => { closeSheets(); g.gf = false; g.affinity = 0; g.rejected = 2; girlReact(n, 'Theek hai, jao! 😭💔', { cls: 'loud', act: 'point' }); } },
     { n: '👋 Bye', on: () => closeSheets() },
   ] : [
     { n: '🌹 Propose karo', cls: 'good', d: bestGift() ? `${bestGift().n} ke saath` : 'Bina gift ke…', on: () => propose(n) },
@@ -790,19 +838,22 @@ function openGirl(n) {
 function giveGift(n) {
   const gft = bestGift();
   if (!gft) return say(GIRL[L()].noGift, '🌹 Bazaar gali mein Phool wala / Chudi bhandar');
+  closeSheets();
   takeFromBag(gft);
   n.girl.affinity += gft.gift * 0.1;
-  hold(me, itemMesh(gft.mesh));
-  setTimeout(() => hold(me, null), 1200);
-  say(pick(GIRL[L()].gift), `+ pasand (${gft.n})`);
+  meSay(`Ye tumhare liye… ${gft.n} 🎁`);
+  handOver(n, gft.mesh);
+  setTimeout(() => girlReact(n, pick(GIRL[L()].gift), { cls: 'love', sub: `💗 ${n.girl.name} ko ${gft.n} pasand aaya (+pasand)` }), 1200);
 }
 function propose(n) {
   const g = n.girl, t = state.t;
-  if (g.rejected >= 2 || g.slapped > 0) return slap(n);
+  closeSheets();
+  meSay('🌹 Kya tum meri girlfriend banogi?', 'love');
+  if (g.rejected >= 2 || g.slapped > 0) { setTimeout(() => slap(n), 900); return; }
   let score = 0.12 + g.affinity;
   const gft = bestGift();
   let usedGift = '';
-  if (gft) { takeFromBag(gft); score += gft.gift * 0.13; usedGift = gft.n; hold(me, itemMesh(gft.mesh)); setTimeout(() => hold(me, null), 1500); }
+  if (gft) { takeFromBag(gft); score += gft.gift * 0.13; usedGift = gft.n; handOver(n, gft.mesh, 700); }
   if (t - state.haircutAt < 300) score += 0.12;
   if (t < state.ittarUntil) score += 0.12;
   if (me.spec.shades) score += 0.05;
@@ -814,47 +865,65 @@ function propose(n) {
   if (!gft) tips.push('gulab/chudi');
   if (t - state.haircutAt >= 300) tips.push('haircut');
   if (t >= state.ittarUntil) tips.push('ittar');
-  if (Math.random() < score) {
-    for (const o of npcs.girls()) if (o.girl.gf && o !== n) o.girl.gf = false;
-    g.gf = true;
-    say(girlLine('yes'), usedGift ? `🎁 ${usedGift}` : '');
-    flash('love');
-    glide(800, 1600, 0.4, 'sine', 0.05);
-    toast(X().gfFollow(g.name), 3000);
-    state.romance = true;
-    setTimeout(() => closeSheets(), 2200);
-  } else {
-    g.rejected++;
-    say(girlLine('no'), tips.length ? `Tip: ${tips.join(', ')} se chance badhega 😉` : '');
-  }
+  const yes = Math.random() < score;
+  setTimeout(() => {
+    if (yes) {
+      for (const o of npcs.girls()) if (o.girl.gf && o !== n) o.girl.gf = false;
+      g.gf = true;
+      girlReact(n, girlLine('yes'), { cls: 'love' });
+      flash('love');
+      glide(800, 1600, 0.4, 'sine', 0.05);
+      toast(X().gfFollow(g.name) + (usedGift ? ` • 🎁 ${usedGift}` : ''), 3200);
+      state.romance = true;
+    } else {
+      g.rejected++;
+      girlReact(n, girlLine('no'), { cls: 'loud', act: 'point', sub: tips.length ? `💡 Tip: ${tips.join(', ')} se chance badhega 😉` : '' });
+    }
+  }, 1300);
 }
 function pickup(n) {
   const g = n.girl, r = Math.random();
-  const myLine = `Tum: "${pick(PICKUP[L()])}"`;
-  if (r < 0.25 + g.affinity * 0.3) { g.affinity += 0.08; say(pick(GIRL[L()].laugh), myLine); }
-  else if (r < 0.88) { g.rejected += 0.5; say(girlLine('no'), myLine); }
-  else slap(n);
+  closeSheets();
+  meSay(`"${pick(PICKUP[L()])}"`);
+  setTimeout(() => {
+    if (r < 0.25 + g.affinity * 0.3) { g.affinity += 0.08; girlReact(n, pick(GIRL[L()].laugh), { cls: 'love' }); }
+    else if (r < 0.88) { g.rejected += 0.5; girlReact(n, girlLine('no'), { cls: 'loud', act: 'point' }); }
+    else slap(n);
+  }, 1100);
 }
+function whistleSfx() { glide(1800, 2600, 0.18, 'sine', 0.06); glide(2600, 1500, 0.35, 'sine', 0.06, 0.22); }
 function tease(n) {
-  slap(n);
+  closeSheets();
+  whistleSfx();
+  meSay('😗🎶 Wheeew-wheew!');
+  setTimeout(() => slap(n), 700);
   addWanted(1);
-  setTimeout(() => toast(POLICE[L()].tease, 2600), 900);
+  setTimeout(() => toast(POLICE[L()].tease, 2600), 2000);
 }
 function slap(n) {
   const g = n.girl;
+  closeSheets();
   g.slapped++;
   g.gf = false;
+  // wo chal ke paas aati hai aur chaata maarti hai
+  n.heading = headingTo(walker.pos.x - n.x, walker.pos.z - n.z);
   setAction(n.h, 'slap');
-  n.slapT = 1.2;
+  n.slapT = 1.4;
+  n.pause = 0;
   setTimeout(() => {
     slapSfx();
     flash('slap');
     state.stunUntil = state.t + 1.0;
+    state.hurtUntil = state.t + 0.5;
     me.look = 1.1;
-    say(girlLine('slap'), 'CHATAAK! 👋💥');
+    // jhatka — thoda peeche khisko
+    const kx = walker.pos.x - n.x, kz = walker.pos.z - n.z, kd = Math.hypot(kx, kz) || 1;
+    const nx = walker.pos.x + (kx / kd) * 0.7, nz = walker.pos.z + (kz / kd) * 0.7;
+    if (!footBlocked(nx, nz)) walker.pos.set(nx, 0, nz);
+    ui3d.bubble(n.h.root, '👋💥 ' + girlLine('slap'), 'loud', 3.2);
     toast('👋 CHATAAAK!', 1500);
-  }, 280);
-  setTimeout(() => { if (state.talkGirl === n) closeSheets(); }, 2200);
+  }, 450);
+  setTimeout(() => { n.pause = 2.5; n.pauseAct = 'point'; n.faceTo = { x: walker.pos.x, z: walker.pos.z }; }, 1500);
 }
 function goGhatWith(n) {
   walker.pos.set(2, 0, -108);
@@ -1354,7 +1423,7 @@ function updateCar(dt) {
   if (driveable(nx, nz)) car.pos.set(nx, 0, nz);
   else if (driveable(nx, car.pos.z)) { car.pos.x = nx; car.speed *= 0.97; }
   else if (driveable(car.pos.x, nz)) { car.pos.z = nz; car.speed *= 0.97; }
-  else car.speed *= -0.3;
+  else { if (Math.abs(car.speed) > 7 && t - lastCrash > 1) { lastCrash = t; noise(0.2, 0.4, 200); missions.notify('crash'); } car.speed *= -0.3; }
 
   for (const cow of world.cows) {
     const dx = car.pos.x - cow.x, dz = car.pos.z - cow.z, d = Math.hypot(dx, dz);
@@ -1378,7 +1447,7 @@ function updateCar(dt) {
     const dx = car.pos.x - v.pos.x, dz = car.pos.z - v.pos.z, d = Math.hypot(dx, dz), min = (car.radius || 1) + (v.radius || 1) + 0.5;
     if (d < min && d > 0.01) {
       car.pos.x += (dx / d) * (min - d); car.pos.z += (dz / d) * (min - d);
-      if (Math.abs(car.speed) > 6 && t - lastCrash > 1) { lastCrash = t; noise(0.25, 0.5, 200); toast(fight('honk'), 1800); }
+      if (Math.abs(car.speed) > 6 && t - lastCrash > 1) { lastCrash = t; noise(0.25, 0.5, 200); toast(fight('honk'), 1800); missions.notify('crash'); }
       car.speed *= -0.25;
     }
   }
@@ -1606,6 +1675,7 @@ function updateProximity() {
       const v = nearestVehicle(walker.pos);
       if (v) labels.push({ key: 'veh', x: v.pos.x, y: 2.6, z: v.pos.z, hot: true, text: v.driver ? '[F] 😈 Gaadi chheeno' : '[F] 🛺 Baitho' });
     }
+    labels.push(...missions.labels());
   }
   ui3d.setLabels(labels);
   let txt = '';
@@ -1674,7 +1744,7 @@ function tick() {
   places2.update(t);
   couples.update(dt, t, camera.position);
   if (!state.cine) couple.idle(t);
-  const ev = animals.update(t, dt, ctxPlayer, state, env.night);
+  const ev = animals.update(t, dt, ctxPlayer, state, env.night, traffic ? [ownCar, ...traffic.vehicles] : [ownCar]);
   if (ev && started && t - lastAnimalToast > 6) {
     lastAnimalToast = t;
     if (ev === 'bark') { barkSfx(); toast(state.level === 2 ? UI18[L()].bark : ui('bark'), 1600); } else { meowSfx(); toast(UI[L()].meow, 1200); }
@@ -1688,12 +1758,14 @@ function tick() {
   const party = music.playing && lv.energy > 0.22;
   const events = npcs.update(dt, t, {
     player: ctxPlayer, camera, tod: state.tod, party, vehG: rick, passenger: car.passenger || new THREE.Vector3(0.45, 0.42, 0.95),
+    gfSeat: car.kind === 'auto' ? GF_SEAT_AUTO : null,
     wanted: t < state.escapeUntil || state.open === 'police' ? 0 : state.wanted, activeShop: state.activeShop,
   });
   if (started) {
     for (const e of events) {
       if (e.type === 'hit') {
         addWanted(1);
+        missions.notify('hit');
         glide(200, 80, 0.2, 'triangle', 0.1);
         const line = gaali('hitPed') || pick(PED[L()].hit);
         ui3d.bubble(e.n.h.root, '😵 ' + line, 'loud', 3.2);
@@ -1785,6 +1857,15 @@ function tick() {
   requestAnimationFrame(tick);
 }
 
+let passedT = 0;
+function showPassed(text) {
+  const el = $('passed');
+  el.textContent = text;
+  el.classList.remove('hidden'); el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  clearTimeout(passedT);
+  passedT = setTimeout(() => el.classList.add('hidden'), 4200);
+  beep([523, 659, 784, 1047], 0.14, 'triangle', 0.07);
+}
 // ---------- BOOT ----------
 async function boot() {
   try {
@@ -1826,7 +1907,7 @@ async function boot() {
     giveGun: (g, n) => { weapons.give(g, n); weapons.equip(g); state.weapon = null; toast(`${GUNS[g].n} mila! Right-click/🎯 nishana, click/J goli`, 3000); },
     targets: shootTargets, onRoof: () => state.onRoof, liftPos: LIFT, wanted: () => state.wanted,
     addMoney: (n) => setMoney(state.money + n), addRespect: (n) => missions.addRespect(n),
-    missionPassed: (m, r) => { const el = $('passed'); el.textContent = MISC3[L()].passed(m.title, r); el.classList.remove('hidden'); el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); setTimeout(() => el.classList.add('hidden'), 4200); beep([523, 659, 784, 1047], 0.14, 'triangle', 0.07); saveGame(); },
+    missionPassed: (m, r) => { showPassed(MISC3[L()].passed(m.title, r)); saveGame(); },
     sfx: (k) => { if (k === 'glass') noise(0.12, 0.35, 3000); else beep([880, 1320], 0.08, 'sine', 0.05); },
     load: () => { try { return JSON.parse(localStorage.getItem('mohalla.save') || 'null')?.story || 0; } catch { return 0; } }, save: () => saveGame(),
   });
@@ -1842,8 +1923,9 @@ async function boot() {
     return { x: gx, z: gz, bx: b.x, by: b.y, bz: b.z };
   }).filter((q) => footable(q.x, q.z));
   missions = createMissions({
-    scene, npcs, lang: () => L(), level: () => state.level, toast,
+    scene, npcs, lang: () => L(), level: () => state.level, toast, camera,
     getP: () => ctxPlayer, getVeh: () => car,
+    passed: (title, sub) => showPassed(`${title}  ${sub}`),
     addMoney: (n) => setMoney(state.money + n),
     bubble: (tg, text, cls) => ui3d.bubble(tg, text, cls),
     shopPoint: (id) => { const tr = shopNames[id]; return { x: tr.x, z: tr.z, name: tr.def.name[L()] }; },
@@ -1860,7 +1942,8 @@ async function boot() {
     loadRespect: () => { try { return +localStorage.getItem('mohalla.respect') || 0; } catch { return 0; } },
     saveRespect: (v) => { try { localStorage.setItem('mohalla.respect', String(v)); } catch { /* ok */ } },
   });
-  try { const sv = +localStorage.getItem('mohalla.money'); if (sv > 0) state.money = sv; } catch { /* ok */ }
+  loadGame(); // save sirf ek baar boot pe padho
+  try { const sv = localStorage.getItem('mohalla.money'); if (sv !== null && +sv >= 0) state.money = +sv; } catch { /* ok */ }
   setRetro(false);
   $('btnRetro').classList.add('on');
   $('btnRetro').textContent = '🎬';

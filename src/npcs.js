@@ -8,6 +8,7 @@ const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const rnd = (a, b) => a + R() * (b - a);
 const pick = (a) => a[Math.floor(R() * a.length)];
 const headingTo = (dx, dz) => Math.atan2(-dx, -dz);
+const passable = (x, z) => footable(x, z) || driveable(x, z);
 
 const LANES = [
   { a: [-10.1, -95], b: [-10.1, 420], w: 7, road: 'x0' }, { a: [10.1, -95], b: [10.1, 420], w: 7, road: 'x0' },
@@ -308,18 +309,46 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
       if (d < 26 && d > 2 && n.shootCd <= 0) { n.shootCd = 1.3 + R() * 1.3; ev.push({ type: 'copShot', n, hit: R() < 0.32 }); }
     } else if (n.gunOut) { n.gunOut = false; hold(n.h, itemMesh('lathi')); setOverlay(n.h, null); }
   }
+  // foot: true = sirf footpath, 'any' = footpath ya sadak (chor/police sadak paar kar sakte hain), false = kahin bhi
+  // BUG FIX: pehle seedha raasta band ho to banda wahin khada reh jaata tha (deewar/sadak ke kinaare atak).
+  // Ab rukawat ke aas-paas tircha raasta dhoondta hai, aur n.stuckT / n.progT se pata chalta hai ki atka hua hai.
   function moveToward(n, tx, tz, speed, dt, foot = true) {
     const dx = tx - n.x, dz = tz - n.z, d = Math.hypot(dx, dz);
-    if (d < 0.05) return d;
-    const want = headingTo(dx, dz);
-    n.heading += wrap(want - n.heading) * Math.min(1, dt * 8);
+    // naya goal → progress ka hisaab dobara
+    if (n.gx === undefined || Math.hypot(tx - n.gx, tz - n.gz) > 1.5) { n.gx = tx; n.gz = tz; n.bestD = d; n.progT = 0; }
+    else if (d < n.bestD - 0.4) { n.bestD = d; n.progT = 0; } else n.progT += dt;
+    if (d < 0.05) { n.stuckT = 0; return d; }
+    let ok = foot === 'any' ? passable : foot ? footable : null;
+    // khud hi rukawat ke bahar/andar khada hai (sadak pe gira, spawn, dhakka) → dheela niyam, warna har kadam block:
+    // sadak pe ho to sadak+footpath chalega; building ke andar hi phans gaya to kahin bhi nikal jao
+    if (ok && !ok(n.x, n.z)) ok = ok !== passable && passable(n.x, n.z) ? passable : null;
     const step = Math.min(d, speed * dt);
-    const nx = n.x + (dx / d) * step, nz = n.z + (dz / d) * step;
-    if (!foot || footable(nx, nz)) { n.x = nx; n.z = nz; }
-    else if (footable(nx, n.z)) n.x = nx;
-    else if (footable(n.x, nz)) n.z = nz;
+    let ux = dx / d, uz = dz / d, moved = !ok || ok(n.x + ux * step, n.z + uz * step);
+    if (!moved) {
+      const side = n.steer || (R() < 0.5 ? 1 : -1);
+      search: for (const a of [0.45, 0.9, 1.35, 1.8, 2.3]) for (const sg of [side, -side]) {
+        const c = Math.cos(a * sg), s = Math.sin(a * sg), vx = ux * c - uz * s, vz = ux * s + uz * c;
+        if (ok(n.x + vx * step, n.z + vz * step)) { ux = vx; uz = vz; moved = true; n.steer = sg; break search; }
+      }
+    }
+    if (moved) {
+      n.x += ux * step; n.z += uz * step;
+      n.heading += wrap(headingTo(ux, uz) - n.heading) * Math.min(1, dt * 8);
+      n.stuckT = Math.max(0, (n.stuckT || 0) - dt * 2);
+    } else {
+      n.heading += wrap(headingTo(dx, dz) - n.heading) * Math.min(1, dt * 8);
+      n.stuckT = (n.stuckT || 0) + dt;
+    }
     return d;
   }
+  const isStuck = (n, s) => (n.stuckT || 0) > s || (n.progT || 0) > s * 3;
+  const unstick = (n) => { n.stuckT = 0; n.progT = 0; n.gx = undefined; n.steer = 0; };
+  // seedhi line mein raasta khula hai? (chor ke goal ke liye)
+  const clearLine = (x0, z0, x1, z1) => {
+    const L = Math.hypot(x1 - x0, z1 - z0), k = Math.max(1, Math.ceil(L / 2));
+    for (let i = 1; i <= k; i++) if (!passable(x0 + ((x1 - x0) * i) / k, z0 + ((z1 - z0) * i) / k)) return false;
+    return true;
+  };
 
   function update(dt, t, ctx) {
     const ev = [];
@@ -408,7 +437,7 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
       switch (n.type) {
         case 'walker': {
           if (n.cop && n.mode === 'chase') {
-            const d = moveToward(n, px, pz, ctx.copsShoot && d0(n) < 18 ? 2.5 : 6.4, dt);
+            const d = moveToward(n, px, pz, ctx.copsShoot && d0(n) < 18 ? 2.5 : 6.4, dt, 'any');
             setAction(n.h, d > 1.2 ? (ctx.copsShoot && d < 18 ? 'walk' : 'run') : 'point');
             copGun(n, d, dt, ev, ctx);
             if (d < 1.35 && (pl.mode === 'foot' || Math.abs(pl.speed) < 1.5)) ev.push({ type: 'caught', n });
@@ -416,9 +445,13 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
           }
           if (n.flee > 0) {
             n.flee -= dt;
-            const dx = n.x - px, dz = n.z - pz, dd = Math.hypot(dx, dz) || 1;
+            // atak gaye to bhaagne ki disha ghuma do (deewar mein muh ghusa ke bhaagte nahi rehna)
+            if (isStuck(n, 0.4)) { n.fleeAng = (n.fleeAng || 0) + (R() < 0.5 ? 1 : -1) * rnd(0.9, 1.7); unstick(n); }
+            const a = n.fleeAng || 0, ex = n.x - px, ez = n.z - pz;
+            const dx = ex * Math.cos(a) - ez * Math.sin(a), dz = ex * Math.sin(a) + ez * Math.cos(a), dd = Math.hypot(dx, dz) || 1;
             moveToward(n, n.x + (dx / dd) * 6, n.z + (dz / dd) * 6, 5.4, dt);
-            setAction(n.h, 'run');
+            setAction(n.h, n.stuckT > 0.2 ? 'idle' : 'run');
+            if (n.flee <= 0) n.fleeAng = 0;
             if (n.flee <= 0) n.backToLane = true;
             break;
           }
@@ -428,12 +461,13 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
             setAction(n.h, d > 1.1 ? 'run' : 'idle');
             n.punchCd = (n.punchCd || 0) - dt;
             if (d < 1.15 && n.punchCd <= 0 && pl.mode === 'foot') { setOverlay(n.h, 'punch'); n.ovT = 0.45; n.punchCd = 1.4; ev.push({ type: 'punched', n }); }
+            if (d > 1.5 && isStuck(n, 2)) { n.angry = 0; unstick(n); } // pahunch hi nahi sakta → gussa chhodo
             if (n.angry <= 0) n.backToLane = true;
             break;
           }
           if (n.cop && n.mode === 'return') {
             const la = n.lane, tx = la.a[0] + (la.b[0] - la.a[0]) * n.f, tz = la.a[1] + (la.b[1] - la.a[1]) * n.f;
-            if (moveToward(n, tx, tz, 2, dt) < 0.5) n.mode = null;
+            if (moveToward(n, tx, tz, 2, dt, 'any') < 0.5 || isStuck(n, 3)) { n.mode = null; unstick(n); }
             setAction(n.h, 'walk');
             break;
           }
@@ -504,6 +538,7 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
               const d = moveToward(n, sp.x, sp.z, n.speed, dt);
               setAction(n.h, 'walk');
               if (d < 0.45) n.shopT = rnd(5, 11);
+              else if (isStuck(n, 2)) { sp.busy = false; n.spot = null; n.backToLane = true; unstick(n); } // dukaan tak raasta nahi
             }
             break;
           }
@@ -511,8 +546,15 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
           const len = Math.hypot(la.b[0] - la.a[0], la.b[1] - la.a[1]);
           if (n.backToLane) {
             const tx = la.a[0] + (la.b[0] - la.a[0]) * n.f, tz = la.a[1] + (la.b[1] - la.a[1]) * n.f;
-            if (moveToward(n, tx, tz, n.speed, dt) < 0.5) n.backToLane = false;
-            setAction(n.h, 'walk');
+            if (moveToward(n, tx, tz, n.speed, dt) < 0.5) { n.backToLane = false; unstick(n); }
+            else if (isStuck(n, 1.5)) {
+              // purani lane tak raasta band → sabse paas wali lane pakdo; phir bhi na bane to ghar ke andar chala gaya
+              const p = laneProject(n.x, n.z);
+              if (p.d < 1.2) { n.lane = p.lane; n.f = p.f; n.backToLane = false; unstick(n); }
+              else if (isStuck(n, 4)) { n.backToLane = false; unstick(n); n.hidden = rnd(3, 8); n.h.root.visible = false; break; }
+              else if (p.lane !== n.lane || Math.abs(p.f - n.f) > 0.01) { n.lane = p.lane; n.f = p.f; n.stuckT = 0; }
+            }
+            setAction(n.h, n.stuckT > 0.3 ? 'idle' : 'walk');
             break;
           }
           // sadak paar karna 🚶‍♂️ (accident yahin hote hain)
@@ -548,29 +590,46 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
           break;
         }
         case 'thief': {
+          // BUG FIX: pehle goal poore naksha pe random tha aur seedhi line mein bhaagta tha — beech mein
+          // deewar/building aayi to wahin atak jaata tha. Ab paas ka (12–45m) aisa goal jahan tak seedha
+          // raasta khula ho, player se door; sadak bhi paar kar sakta hai; atke to turant naya goal.
           const dP = Math.hypot(n.x - px, n.z - pz);
-          if (!n.goal || Math.hypot(n.goal.x - n.x, n.goal.z - n.z) < 2) {
-            let best = null, bd = -1;
-            for (let k = 0; k < 8; k++) {
-              const l = pickLane(), f = R();
-              const gx = l.a[0] + (l.b[0] - l.a[0]) * f, gz = l.a[1] + (l.b[1] - l.a[1]) * f;
-              const sc = Math.hypot(gx - px, gz - pz) - Math.hypot(gx - n.x, gz - n.z) * 0.5;
-              if (Math.hypot(gx - n.x, gz - n.z) > 15 && sc > bd) { bd = sc; best = { x: gx, z: gz }; }
+          const reached = n.goal && Math.hypot(n.goal.x - n.x, n.goal.z - n.z) < 2;
+          if (!n.goal || reached || isStuck(n, 0.35)) {
+            let best = null, bd = -Infinity;
+            for (let k = 0; k < 36; k++) {
+              let gx, gz;
+              if (k < 24) { // aas-paas kisi bhi disha mein
+                const a = R() * Math.PI * 2, r = rnd(12, 45);
+                gx = n.x + Math.sin(a) * r; gz = n.z + Math.cos(a) * r;
+              } else { const l = pickLane(), f = R(); gx = l.a[0] + (l.b[0] - l.a[0]) * f; gz = l.a[1] + (l.b[1] - l.a[1]) * f; }
+              if (!passable(gx, gz)) continue;
+              const dg = Math.hypot(gx - n.x, gz - n.z);
+              if (dg < 8) continue;
+              // player se door jaao, aur player ki taraf se hoke nahi
+              const awayDot = ((gx - n.x) * (n.x - px) + (gz - n.z) * (n.z - pz)) / ((dg * dP) || 1);
+              let sc = Math.hypot(gx - px, gz - pz) + awayDot * 20 - (dg > 50 ? dg - 50 : 0);
+              if (clearLine(n.x, n.z, gx, gz)) sc += 60; else sc -= 40;
+              if (n.lastGoal && Math.hypot(gx - n.lastGoal.x, gz - n.lastGoal.z) < 4) sc -= 50; // wahi atka hua goal dobara nahi
+              if (sc > bd) { bd = sc; best = { x: gx, z: gz }; }
             }
+            if (n.goal && !reached) n.lastGoal = n.goal;
             n.goal = best || { x: n.x + rnd(-20, 20), z: n.z + rnd(-20, 20) };
+            unstick(n);
           }
-          moveToward(n, n.goal.x, n.goal.z, dP < 25 ? 5.7 : 4.2, dt);
+          moveToward(n, n.goal.x, n.goal.z, dP < 25 ? 5.7 : 4.2, dt, 'any');
           setAction(n.h, 'run');
           break;
         }
         case 'guard': {
           if (n.mode === 'chase') {
-            const d = moveToward(n, px, pz, 6.4, dt);
+            const d = moveToward(n, px, pz, 6.4, dt, 'any');
             setAction(n.h, d > 1.2 ? 'run' : 'point');
             copGun(n, d, dt, ev, ctx);
             if (d < 1.35 && (pl.mode === 'foot' || Math.abs(pl.speed) < 1.5)) ev.push({ type: 'caught', n });
           } else {
-            const d = moveToward(n, n.home.x, n.home.z, 2, dt);
+            let d = moveToward(n, n.home.x, n.home.z, 2, dt, 'any');
+            if (d > 0.3 && isStuck(n, 3)) { n.x = n.home.x; n.z = n.home.z; d = 0; unstick(n); } // thana ka raasta na mile to seedha duty pe
             if (d < 0.3) { n.heading += wrap(n.home.heading - n.heading) * Math.min(1, dt * 4); setAction(n.h, 'idle'); lookAtPlayer(n, px, pz, 12); } else setAction(n.h, 'walk');
           }
           break;

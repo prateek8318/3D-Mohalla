@@ -8,7 +8,8 @@ export function createUI3D(camera) {
   const bubbles = [];
   const labels = new Map();
 
-  function bubble(target, text, cls = '', dur = 3) {
+  /** speaker = jo asal mein bol raha hai (jaise gaadi ke andar ki sawari) — uski aawaz/gender */
+  function bubble(target, text, cls = '', dur = 3, speaker = null) {
     const el = document.createElement('div');
     el.className = 'bubble ' + cls;
     el.textContent = text;
@@ -21,8 +22,9 @@ export function createUI3D(camera) {
     // 🗣️ paas wala bole to aawaz bhi (door wale chup — warna shor)
     const wp = target.isObject3D ? target.getWorldPosition(new THREE.Vector3()) : target;
     if (wp && Math.hypot(wp.x - camera.position.x, (wp.z ?? 0) - camera.position.z) < 28) {
-      const ud = target.isObject3D ? (target.userData.female !== undefined ? target.userData : target.children.find((c) => c.userData?.female !== undefined)?.userData) : null;
-      speak(text, { female: ud?.female, loud: /loud/.test(cls) });
+      const sp = speaker || target;
+      const ud = sp.isObject3D ? (sp.userData.female !== undefined ? sp.userData : sp.children.find((c) => c.userData?.female !== undefined)?.userData) : null;
+      speak(text, { female: !!ud?.female, who: sp.uuid || sp.who, loud: /loud/.test(cls) });
     }
   }
 

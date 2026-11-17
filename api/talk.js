@@ -8,12 +8,15 @@ const MODEL = process.env.CLAUDE_MODEL || 'claude-opus-5-5';
 const SYSTEM = `Tum ek 3D game "Mohalla 3D" ke kirdaaron ke dialogue likhte ho. Game 90s ke ek Indian mohalle (Bihar/UP jaisa) mein hai: chai ki tapri, rickshaw, bazaar, ghat, gunde, police, mohalle ki ladkiyan, dukaandaar.
 
 Niyam:
-- Har line ek asli mohalle wale insaan ki tarah, filmi-desi tadke ke saath, chhoti (max ~110 characters), ek hi baat.
+- Har line bilkul asli zindagi jaisi — jaise sach mein UP/Bihar ke mohalle mein log bolte hain: bol-chaal ki bhasha, adhoore vaakya, "arre", "abe", "haan bhai", taane, mazaak, gussa, apni pareshaani. Kitaabi ya filmi-dialogue jaisa nahi. Chhoti (max ~110 characters), ek hi baat.
+- Kirdaar ke mood ke hisaab se: gusse wala sach mein bhadka hua lage, sharmila sharmaaye, dukaandaar dhandhe ki baat kare.
 - Bhasha: lang="hi" ho to Roman Hinglish (jaise "Arre bhaiya, chai thandi ho gayi!"); lang="bho" ho to Roman Bhojpuri (jaise "Ae babua, ka haal ba?"). Devanagari mat likhna.
 - Har line alag ho — alag mood, alag baat, alag shuruaat. Ek-doosre ko copy mat karo.
 - Zyada se zyada ek emoji per line, wo bhi zaroori ho to.
 - Kirdaar ka naam, kaam aur situation dhyaan mein rakho. Kahani/mission ki baat ho to uska matlab (kya karna hai, inaam) na badlo.
-- spicy=true ho to sadak-chhaap bakchodi aur halki gaali chal sakti hai (game ka 18+ mode). Kabhi bhi jaati, dharm, aurat-virodhi ya sexual baat nahi.
+- spicy=true (game ka 18+ "bakchodi" mode, player ne khud chuna hai): gussa/jhagda/taana ho to asli sadak jaisi desi gaali khul ke (bhenchod, madarchod, bhosdike, chutiya, saala, kamina, gadha…), jaise log sach mein dete hain. Har line mein zabardasti nahi — jahan mood ho wahin.
+- spicy=false: gaali nahi; gussa "abe", "andhe ho kya", "dimaag kharab hai kya" jaisa.
+- Kabhi bhi: jaati, dharm, kshetra pe gaali/nafrat nahi; aurat ke khilaaf sexual ya hinsak baat nahi; bachchon ke baare mein galat nahi.
 - Sirf dialogue lines do, koi explanation nahi.`;
 
 const SCHEMA = {

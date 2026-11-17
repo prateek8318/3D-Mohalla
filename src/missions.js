@@ -226,7 +226,7 @@ export function createMissions(ctx) {
     m.veh = veh;
     target(m.dest.x, m.dest.z);
     const boardLine = m.kind === 'patient' ? pick(V().patientChat) : m.kind === 'rush' ? AL('rushBoard', ex.rushBoard) : m.kind === 'vip' ? AL('vipBoard', ex.vipBoard) : AL('board', tt.paxBoard);
-    ctx.bubble(veh.g, boardLine, m.kind === 'rush' || m.kind === 'patient' ? 'loud' : '');
+    ctx.bubble(veh.g, boardLine, m.kind === 'rush' || m.kind === 'patient' ? 'loud' : '', m.pax.root);
     ctx.sfx('coin');
     if (m.kind === 'patient') ctx.toast(`🚑 Mareez stretcher pe! 🏥 ${m.dest.name} — jaldi, time kam hai!`, 3400);
     else ctx.toast(`✅ Sawari baith gayi! 🏁 Manzil: ${m.dest.name} — teer follow karo${m.kind === 'vip' ? ' • TAKKAR MAT MAARNA!' : ''}`, 3400);
@@ -474,7 +474,7 @@ export function createMissions(ctx) {
         setHud(K.title, d < 16 ? `🛑 ${m.dest.name} aa gaya — RUKO, sawari utaro!${crashTxt}` : `🏁 ${m.dest.name} pe chhodo • ${Math.round(d)}m${crashTxt}`, m.timer);
         if (m.chat <= 0) {
           m.chat = m.kind === 'rush' ? 4 + R() * 3 : 10 + R() * 8;
-          ctx.bubble(m.veh.g, m.kind === 'patient' ? pick(V().patientChat) : m.kind === 'rush' ? AL('rushChat', ex.rushChat) : m.kind === 'vip' ? AL('vipChat', ex.vipChat) : AL('chat', tt.paxChat), m.kind === 'rush' ? 'loud' : '');
+          ctx.bubble(m.veh.g, m.kind === 'patient' ? pick(V().patientChat) : m.kind === 'rush' ? AL('rushChat', ex.rushChat) : m.kind === 'vip' ? AL('vipChat', ex.vipChat) : AL('chat', tt.paxChat), m.kind === 'rush' ? 'loud' : '', m.pax.root);
         }
         const crashedOut = K.maxCrash && m.crashes >= K.maxCrash;
         const quit = p.mode !== 'drive' || ctx.getVeh() !== m.veh || (K.hard ? m.timer <= 0 : m.timer <= -10) || crashedOut;
@@ -643,11 +643,11 @@ export function createMissions(ctx) {
     const ex = E();
     if (kind === 'crash') {
       m.crashes++;
-      if (m.kind === 'vip') { ctx.bubble(m.veh.g, AL('vipCrash', ex.vipCrash), 'loud'); ctx.toast(`💥 Takkar ${m.crashes}/${m.K.maxCrash} — ₹50 katenge!`, 1800); }
-      else ctx.bubble(m.veh.g, AL('scared', ex.scared), 'loud');
+      if (m.kind === 'vip') { ctx.bubble(m.veh.g, AL('vipCrash', ex.vipCrash), 'loud', m.pax.root); ctx.toast(`💥 Takkar ${m.crashes}/${m.K.maxCrash} — ₹50 katenge!`, 1800); }
+      else ctx.bubble(m.veh.g, AL('scared', ex.scared), 'loud', m.pax.root);
     } else if (kind === 'hit') {
       m.hits++;
-      ctx.bubble(m.veh.g, AL('scared', ex.scared), 'loud');
+      ctx.bubble(m.veh.g, AL('scared', ex.scared), 'loud', m.pax.root);
       ctx.toast('😱 Sawari dar gayi — ₹40 kam milenge', 1800);
     }
   }

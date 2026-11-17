@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { speak } from './voice.js';
 
 /** Logon ke sar pe bolne wale bubble + cheezon ke upar tairte naam */
 export function createUI3D(camera) {
@@ -17,6 +18,12 @@ export function createUI3D(camera) {
     for (const o of bubbles) if (o.target === target) o.until = 0;
     bubbles.push(b);
     if (bubbles.length > 7) bubbles[0].until = 0;
+    // 🗣️ paas wala bole to aawaz bhi (door wale chup — warna shor)
+    const wp = target.isObject3D ? target.getWorldPosition(new THREE.Vector3()) : target;
+    if (wp && Math.hypot(wp.x - camera.position.x, (wp.z ?? 0) - camera.position.z) < 28) {
+      const ud = target.isObject3D ? (target.userData.female !== undefined ? target.userData : target.children.find((c) => c.userData?.female !== undefined)?.userData) : null;
+      speak(text, { female: ud?.female, loud: /loud/.test(cls) });
+    }
   }
 
   function place(el, wp, y) {

@@ -291,6 +291,7 @@ export function makeHuman(o = {}) {
 
   const root = new THREE.Group();
   root.rotation.order = 'YXZ';
+  root.userData.female = !!female; // 🗣️ aawaz ke liye
   const hips = new THREE.Group(); hips.position.y = 0.95; root.add(hips);
   const spine = new THREE.Group(); spine.position.y = 0.06; hips.add(spine);
   const headPivot = new THREE.Group(); headPivot.position.y = 0.6; spine.add(headPivot);

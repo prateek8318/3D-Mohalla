@@ -986,12 +986,14 @@ export function buildWorld(scene, { isTouch, renderer }) {
     for (const l of lightPool) l.intensity = (l.userData.base || 0) * (0.35 + 0.65 * night);
     for (const c of clothes) c.rotation.y = Math.sin(t * 2 + c.position.x * 3) * 0.25;
     sunLight.intensity = day * 2.15 + env.golden * 0.5;
-    moonLight.intensity = 0.8 * night;
+    moonLight.intensity = 1.15 * night;
     hemi.color.copy(HEMI_N).lerp(HEMI_D, day);
     hemi.groundColor.copy(GND_N).lerp(GND_D, day);
     // din mein sab safed-chamakta na lage
-    hemi.intensity = 0.85 + day * 0.42;
-    amb.intensity = 0.5 + day * 0.08;
+    // raat mein bhi log/gaadiyan dikhein (pehle bahut andhera tha)
+    hemi.intensity = 1.15 + day * 0.12;
+    amb.intensity = 0.78 - day * 0.2;
+    if (scene.environment) scene.environmentIntensity = 0.28 + day * 0.27;
     lampHead.color.setRGB(2.2, 1.6, 0.9).multiplyScalar(0.2 + 0.8 * night);
     poolMat.opacity = night;
     diyas.material.color.setRGB(3, 1.4, 0.3).multiplyScalar(0.35 + 0.65 * night);

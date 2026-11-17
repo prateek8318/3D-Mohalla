@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
@@ -17,6 +18,7 @@ import { createEyeLock } from './eyelock.js';
 import { buildNPCs } from './npcs.js';
 import { makeHuman, updateHuman, setAction, setOverlay, hold, itemMesh } from './humans.js';
 import { peopleLOD } from './people.js';
+import { speak, setVoice, voiceOn, voiceSupported } from './voice.js';
 import { buildTraffic } from './traffic.js';
 import { buildHotel } from './hotel.js';
 import { buildMinimap } from './minimap.js';
@@ -76,6 +78,9 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
+// halka reflection-map: gaadi ka paint/sheesha aur 3D log raat mein kaale dhabbe na banein
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.35;
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1500);
 const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: isTouch ? 2 : 4 });
 const composer = new EffectComposer(renderer, rt);
@@ -201,6 +206,14 @@ const GF_SEAT_AUTO = new THREE.Vector3(-0.45, 0.42, 0.95); // sawari daayein, gi
 const keys = {};
 const joy = { x: 0, y: 0 };
 let camYaw = 0, footYaw = 0, camDist = isTouch ? 12 : 11, footDist = isTouch ? 5.2 : 4.6;
+// 👁️ First-person camera (V / 👁️ button) — apni aankh se mohalla
+let fpv = false, fpPitch = 0;
+function toggleFP() {
+  fpv = !fpv; fpPitch = 0; snapCam = true;
+  if (!fpv && me) me.root.visible = true;
+  $('btnFP')?.classList.toggle('on', fpv);
+  toast(fpv ? '👁️ First-person — mouse/ungli se idhar-udhar dekho (V se wapas)' : '🎥 Third-person camera', 1800);
+}
 
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
@@ -212,6 +225,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyF' && !state.open) toggleRide();
   if (e.code === 'KeyB') { if (state.open === 'bag') closeSheets(); else if (!state.open) openBag(); }
   if (e.code === 'KeyH') horn();
+  if (e.code === 'KeyV') toggleFP();
   if (e.code === 'KeyJ') { if (weapons?.cur && state.mode === 'foot') shoot(); else attack(); }
   if (e.code === 'KeyR') { if (weapons?.aiming) { aimToggle = false; stopAim(); } else { aimToggle = true; startAim(); } }
   if (['Digit1', 'Digit2', 'Digit3', 'Digit0'].includes(e.code)) equipSlot(e.code);
@@ -242,6 +256,7 @@ addEventListener('pointermove', (e) => {
     const k = weapons.cur === 'sniper' ? 0.25 : 0.7;
     aimYaw -= dx * k; aimPitch = THREE.MathUtils.clamp(aimPitch - dy * k, -0.9, 0.7);
   } else if (state.mode === 'drive') camYaw -= dx; else footYaw -= dx;
+  if (fpv && !weapons?.aiming) fpPitch = THREE.MathUtils.clamp(fpPitch - dy, -1.1, 1.0);
   drag.x = e.clientX; drag.y = e.clientY;
 });
 addEventListener('pointerup', () => { drag = null; });
@@ -1095,6 +1110,12 @@ function setRetro(on) {
   $('btnRetro').classList.toggle('on', on);
   $('vhs').classList.toggle('hidden', !on);
 }
+$('btnFP').onclick = () => toggleFP();
+// 🔊 dialogue ki aawaz chalu/band
+$('btnVoice').classList.toggle('on', voiceOn());
+if (!voiceSupported) $('btnVoice').style.display = 'none';
+$('btnVoice').onclick = () => { setVoice(!voiceOn()); $('btnVoice').classList.toggle('on', voiceOn()); $('btnVoice').textContent = voiceOn() ? '🔊' : '🔇'; toast(voiceOn() ? '🔊 Dialogue ki aawaz ON' : '🔇 Aawaz band', 1500); };
+$('btnVoice').textContent = voiceOn() ? '🔊' : '🔇';
 $('btnRetro').onclick = () => { state.cineFx = !state.cineFx; $('btnRetro').classList.toggle('on', state.cineFx); toast(state.cineFx ? '🎬 Cinematic look ON' : '🎬 Cinematic look OFF'); };
 
 // ---------- ROMANTIC / SHOW SCENES 🎬 ----------
@@ -1132,6 +1153,7 @@ function endScene() {
 const camPos = new THREE.Vector3(), camAim = new THREE.Vector3();
 function updateScene(dt) {
   const s = state.scene;
+  if (fpv) me.root.visible = true; // cinematic mein apna banda dikhe
   const T = (performance.now() - s.start) / 1000;
   s.update(T, dt);
   s.cam(T, camPos, camAim);
@@ -1141,7 +1163,7 @@ function updateScene(dt) {
   camera.lookAt(camLook);
   const lines = s.lines;
   const idx = Math.min(lines.length - 1, Math.floor((T / s.dur) * lines.length));
-  if (idx !== s.sub) { s.sub = idx; $('cineSub').textContent = lines[idx]; }
+  if (idx !== s.sub) { s.sub = idx; $('cineSub').textContent = lines[idx]; speak(lines[idx], { priority: true, female: idx % 2 === 1 }); }
   if (T >= s.dur) endScene();
 }
 function nightify() { const h = state.tod * 24; if (h > 6 && h < 18.5) { state.realTime = false; state.tod = 20.4 / 24; } state.romance = true; }
@@ -1297,13 +1319,14 @@ function updateCine(dt) {
     if (shot === 'a') couple.setK(sm(2.2, 4.8, T));
     else couple.setK(1 - sm(10, 11.5, T), sm(10.5, 12, T));
   }
+  if (fpv) me.root.visible = true;
   if (shot !== c.shot) { camera.position.copy(shotPos); camLook.copy(shotLook); c.shot = shot; }
   camera.position.lerp(shotPos, 1 - Math.exp(-dt * 3));
   camLook.lerp(shotLook, 1 - Math.exp(-dt * 3));
   camera.lookAt(camLook);
   if (T > 4.8 && !c.chimed) { c.chimed = true; flash('love'); glide(1200, 1800, 0.5, 'sine', 0.04); glide(1500, 2200, 0.6, 'sine', 0.03, 0.3); }
   const sub = T < 2.5 ? 0 : T < 7 ? 1 : T < 10 ? 2 : 3;
-  if (sub !== c.sub) { c.sub = sub; $('cineSub').textContent = KISS_LINES[L()][sub]; }
+  if (sub !== c.sub) { c.sub = sub; $('cineSub').textContent = KISS_LINES[L()][sub]; speak(KISS_LINES[L()][sub], { priority: true, female: sub % 2 === 1 }); }
   if (T >= CINE_LEN) endCine();
 }
 
@@ -1887,6 +1910,7 @@ function jump() {
 // ---------- LOOP ----------
 const clock = new THREE.Clock();
 const camTarget = new THREE.Vector3(), camLook = new THREE.Vector3(), tmp = new THREE.Vector3();
+const FP_EYE = new THREE.Vector3(0, 1.22, -0.08); // seat se aankh tak
 let lastCrash = 0, lastHonk = 0, frameN = 0;
 let started = false, lastCowToast = 0, snapCam = false, lastAnimalToast = 0, lastClock = '', retroAmt = 0, sirenT = 0, lastHitToast = 0;
 
@@ -2117,14 +2141,32 @@ function updateCamera(dt, lv) {
       camera.position.copy(camTarget); camLook.copy(tmp);
     }
   }
+  // 👁️ first-person: sar ki jagah se, seedha aage (aim karte waqt aim wala camera hi)
+  const fp = fpv && !weapons.aiming && state.seq?.type !== 'salon';
+  if (fp) {
+    if (state.mode === 'drive') {
+      if (Math.abs(car.speed) > 2 && !drag) camYaw *= 1 - Math.min(1, dt * 2);
+      camTarget.copy(car.seat).add(FP_EYE); rick.localToWorld(camTarget);
+      const h = car.heading + camYaw;
+      tmp.set(camTarget.x - Math.sin(h) * 10, camTarget.y + Math.sin(fpPitch) * 10 - 0.6, camTarget.z - Math.cos(h) * 10);
+    } else {
+      const by = groundY() + walker.y;
+      camTarget.set(walker.pos.x - Math.sin(footYaw) * 0.12, by + (me.action === 'sit' ? 1.15 : 1.66), walker.pos.z - Math.cos(footYaw) * 0.12);
+      tmp.set(camTarget.x - Math.sin(footYaw) * 10 * Math.cos(fpPitch), camTarget.y + Math.sin(fpPitch) * 10, camTarget.z - Math.cos(footYaw) * 10 * Math.cos(fpPitch));
+    }
+    me.root.visible = false; // apna sar camera ke aage na aaye
+    camera.position.copy(camTarget); camLook.copy(tmp); snapCam = false;
+  } else if (fpv) me.root.visible = true;
   if (snapCam) { camera.position.copy(camTarget); camLook.copy(tmp); snapCam = false; }
-  camera.position.lerp(camTarget, 1 - Math.exp(-dt * (state.mode === 'drive' ? 4 : 7)));
-  camLook.lerp(tmp, 1 - Math.exp(-dt * 8));
-  camera.position.y += lv.bass * (state.mode === 'drive' ? 0.12 : 0.03);
+  if (!fp) {
+    camera.position.lerp(camTarget, 1 - Math.exp(-dt * (state.mode === 'drive' ? 4 : 7)));
+    camLook.lerp(tmp, 1 - Math.exp(-dt * 8));
+  }
+  if (!fp) camera.position.y += lv.bass * (state.mode === 'drive' ? 0.12 : 0.03);
   if (state.mode === 'foot' && !weapons.aiming && (me.action === 'run' || me.action === 'walk')) {
     const runC = me.action === 'run';
-    camera.position.y += Math.sin(me.phase * 2) * (runC ? 0.045 : 0.012);
-    camera.position.x += Math.cos(me.phase) * (runC ? 0.03 : 0.006);
+    camera.position.y += Math.sin(me.phase * 2) * (runC ? 0.045 : 0.012) * (fp ? 0.6 : 1);
+    if (!fp) camera.position.x += Math.cos(me.phase) * (runC ? 0.03 : 0.006);
   }
   if (t < state.fireUntil || t < state.stunUntil) {
     camera.position.x += (Math.random() - 0.5) * 0.3;
@@ -2148,6 +2190,13 @@ function updateCamera(dt, lv) {
     if (!state.wasDrunk) state.wasDrunk = true;
   } else if (state.wasDrunk) { state.wasDrunk = false; toast(BAR[L()].sober, 1800); }
 }
+
+const GIRL_LINES = ['Haan ji? Kuch kaam tha? 🙂', 'Kya dekh rahe ho aise? 😏', 'Bolo bolo, sun rahi hoon', 'Aaj mausam accha hai na? ☀️', 'Tum yahin ke ho kya?'];
+const GF_LINES = ['Kahan the itni der se? 💞', 'Tumhara hi intezaar tha 😊', 'Chalo na kahin ghoomne chalte hain', 'Aaj kuch special plan hai? 💕'];
+const KEEPER_LINES = ['Aao bhaiya, kya chahiye? 🙏', 'Ekdum taaza maal hai, dekh lo!', 'Swagat hai! Kya sewa karein?', 'Bolo boss, kya doon?'];
+const PLACE_LINES = ['Andar aao, dekh lo kya hai 👀', 'Chalo, andar chalte hain', 'Yahan ruk ke dekhna banta hai'];
+const pickLine = (seed, arr) => { let h = 0; for (const c of String(seed)) h = (h * 31 + c.charCodeAt(0)) | 0; return arr[Math.abs(h) % arr.length]; };
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function updateProximity() {
   const p = state.mode === 'drive' ? car.pos : walker.pos;
@@ -2176,31 +2225,47 @@ function updateProximity() {
       const d = Math.hypot(tr.x - p.x, tr.z - p.z);
       if (d > 22 || !tr.def.name) continue;
       const hot = tr === nearest;
-      labels.push({ key: 'tr' + tr.x.toFixed(1) + tr.z.toFixed(1), x: tr.x, y: tr.keeper ? 3.1 : 2.6, z: tr.z, hot, text: (hot ? (state.mode === 'drive' && !tr.def.music ? '[F] utro → ' : '[E] ') : '') + (tr.def.avatar || '🎧') + ' ' + tr.def.name[L()] });
+      labels.push({ key: 'tr' + tr.x.toFixed(1) + tr.z.toFixed(1), x: tr.x, y: tr.keeper ? 3.1 : 2.6, z: tr.z, hot, text: (tr.def.avatar || '🎧') + ' ' + tr.def.name[L()] });
     }
     if (state.mode === 'foot') {
       for (const g of npcs.girls()) {
         const d = Math.hypot(g.x - p.x, g.z - p.z);
         if (d > 9 || g.riding || g.scene || g.hidden > 0) continue;
-        labels.push({ key: 'g' + g.girl.name, x: g.x, y: 2.05, z: g.z, hot: g === nearGirl, text: (g === nearGirl ? '[E] ' : '') + (g.girl.gf ? '💞 ' : '👩 ') + g.girl.name });
+        labels.push({ key: 'g' + g.girl.name, x: g.x, y: 2.05, z: g.z, hot: g === nearGirl, text: (g.girl.gf ? '💞 ' : '👩 ') + g.girl.name });
       }
       const v = nearestVehicle(walker.pos);
-      if (v) labels.push({ key: 'veh', x: v.pos.x, y: 2.6, z: v.pos.z, hot: true, text: v.driver ? '[F] 😈 Gaadi chheeno' : '[F] 🛺 Baitho' });
+      if (v) labels.push({ key: 'veh', x: v.pos.x, y: 2.6, z: v.pos.z, hot: true, text: v.driver ? '😈 Gaadi chheeno' : '🛺 Baitho' });
     }
     labels.push(...missions.labels());
   }
   ui3d.setLabels(labels);
-  let txt = '';
+  // baat-cheet jaisa prompt: avatar + kaun bol raha + uski line + key
+  let pr = null;
   if (!state.open && !state.seq) {
-    if (nearGirl) txt = X().talk(nearGirl.girl.name + (nearGirl.girl.gf ? ' 💞' : ''));
-    else if (nearest) {
-      const name = nearest.def.name[L()];
-      txt = state.mode === 'drive' && !nearest.def.music ? X().walkIn(name) : UI[L()].prompt(name);
-    } else if (state.mode === 'foot' && nearestVehicle(walker.pos)) { const v = nearestVehicle(walker.pos); txt = v.driver ? 'F — Gaadi chheeno 😈' : X().enter; }
+    if (nearGirl) {
+      const g = nearGirl.girl;
+      pr = { key: 'E', av: g.gf ? '💞' : '👩', who: g.name, cls: 'love', said: pickLine(g.name, g.gf ? GF_LINES : GIRL_LINES), act: 'Baat karo' };
+    } else if (nearest) {
+      const d = nearest.def, name = d.name[L()];
+      if (state.mode === 'drive' && !d.music) pr = { key: 'F', av: d.avatar || '📍', who: name, said: 'Pehle gaadi se utro, phir andar aao', act: 'Utro' };
+      else pr = { key: 'E', av: d.avatar || '🎧', who: name, said: pickLine(name, nearest.keeper ? KEEPER_LINES : PLACE_LINES), act: nearest.keeper ? 'Baat karo' : 'Andar jao' };
+    } else if (state.mode === 'foot' && nearestVehicle(walker.pos)) {
+      const v = nearestVehicle(walker.pos);
+      pr = v.driver
+        ? { key: 'F', av: '😈', who: 'Driver', cls: 'bad', said: 'Oye! Meri gaadi se door reh…', act: 'Gaadi chheeno' }
+        : { key: 'F', av: '🛺', who: 'Rickshaw', said: 'Khaali hai, chalo kahin ghoomne', act: 'Baitho' };
+    }
   }
   const el = $('prompt');
-  if (txt) { if (el.textContent !== txt) el.textContent = txt; el.classList.remove('hidden'); $('mAct').classList.toggle('hidden', !(nearGirl || nearest)); }
-  else { el.classList.add('hidden'); $('mAct').classList.add('hidden'); }
+  if (pr) {
+    const sig = pr.key + pr.who + pr.said;
+    if (el.dataset.sig !== sig) {
+      el.dataset.sig = sig;
+      el.className = 'prompt talkbox ' + (pr.cls || '');
+      el.innerHTML = `<span class="tb-av">${esc(pr.av)}</span><span class="tb-body"><b class="tb-who">${esc(pr.who)}</b><span class="tb-said">“${esc(pr.said)}”</span><span class="tb-act"><kbd>${pr.key}</kbd>${esc(pr.act)}</span></span>`;
+    }
+    el.classList.remove('hidden'); $('mAct').classList.toggle('hidden', !(nearGirl || nearest));
+  } else { el.classList.add('hidden'); el.dataset.sig = ''; $('mAct').classList.add('hidden'); }
   $('mF').textContent = state.mode === 'drive' ? '🚶' : '🛺';
   $('mHorn').classList.toggle('hidden', state.mode !== 'drive');
 }
@@ -2675,7 +2740,7 @@ async function boot() {
   rick.add(animals.rickCat.g);
   scene.add(rick);
   rick.position.copy(car.pos);
-  ownCar = Object.assign(car, { g: rick, wheels: rick.userData.wheels, seat: new THREE.Vector3(0, 0.72, -0.5), passenger: new THREE.Vector3(0.45, 0.42, 0.95), kind: 'auto', max: 15, radius: 1.0, len: 3.4, own: true });
+  ownCar = Object.assign(car, { g: rick, wheels: rick.userData.wheels, seat: new THREE.Vector3(0, 0.72, -0.5), passenger: new THREE.Vector3(0.45, 0.42, 0.95), kind: 'auto', max: 22, accel: 26, radius: 1.0, len: 3.4, own: true });
   traffic = buildTraffic(scene, { isTouch });
   me = makeHuman({ outfit: 'shirt', top: 0x2f5fa8, bottom: 0x1f3a6a, hairStyle: 'short', stache: true, skin: 0xb9774a, hair: 0x111111, hero: true, buff: 1 });
   rick.add(me.root);

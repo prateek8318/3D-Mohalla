@@ -10,7 +10,7 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 // Koi bhi Mixamo-skeleton wala model chalega (Mixamo, Ready Player Me, …).
 const BASE = (import.meta.env?.BASE_URL || '/') + 'models/people/';
 export const MODELS = [
-  { file: 'male1.glb', role: 'male', tint: { Wolf3D_Outfit_Top: 'top', Wolf3D_Outfit_Bottom: 'bottom' } },
+  { file: 'male1.glb', role: 'male', tint: { Wolf3D_Outfit_Top: 'top', Wolf3D_Outfit_Bottom: 'bottom', Wolf3D_Outfit_Footwear: 'shoe', Wolf3D_Head: 'skinT', Wolf3D_Body: 'skinT', Wolf3D_Beard: 'hairT' }, hat: 'Mesh', beard: 'Wolf3D_Beard' },
   { file: 'female1.glb', role: 'female' },
 ];
 
@@ -52,6 +52,18 @@ function calibrate(scene, def) {
   const flip = new THREE.Group(); flip.rotation.y = Math.PI; // Mixamo +Z dekhta hai, hamara rig -Z
   holder.add(flip); flip.add(scene);
   holder.updateMatrixWorld(true);
+  // PBR theek karo: metal-jaisa material bina reflection ke kaala dikhta hai → kapda/skin jaisa banao,
+  // aur texture se halki khud ki roshni taaki raat mein chehra-kapde dikhein
+  scene.traverse((o) => {
+    if (!o.isMesh) return;
+    for (const mt of Array.isArray(o.material) ? o.material : [o.material]) {
+      if (!mt.isMeshStandardMaterial) continue;
+      mt.metalness = 0; mt.metalnessMap = null;
+      mt.roughness = Math.max(0.6, mt.roughness ?? 0.8);
+      if (mt.map) { mt.emissiveMap = mt.map; mt.emissive = new THREE.Color(0xffffff); mt.emissiveIntensity = 0.16; }
+      mt.needsUpdate = true;
+    }
+  });
   const B = findBones(scene);
   for (const m of MAP) if (!B[m.b]) { console.warn('model mein haddi nahi:', def.file, m.b); return null; }
   // pair ki lambai se scale: model ki taang = procedural taang
@@ -104,12 +116,12 @@ export const peopleReady = (async () => {
 })();
 
 const tintCache = new Map();
-function tinted(mat, hex) {
-  const key = mat.uuid + ':' + hex;
+function tinted(mat, hex, lift = 0.15) {
+  const key = mat.uuid + ':' + hex + ':' + lift;
   if (!tintCache.has(key)) {
     const m = mat.clone();
     // texture ka rang rakho, bas kapde ka rang badlo (safed ki taraf halka taaki dikhe)
-    m.color = new THREE.Color(hex).lerp(new THREE.Color(0xffffff), 0.15);
+    m.color = new THREE.Color(hex).lerp(new THREE.Color(0xffffff), lift);
     tintCache.set(key, m);
   }
   return tintCache.get(key);
@@ -135,12 +147,26 @@ function attach(h) {
   const flip = new THREE.Group(); flip.rotation.y = Math.PI; flip.scale.setScalar(T.k);
   flip.add(scene);
   h.root.add(flip);
+  // 🎲 har banda alag: lambai, skin ka rang, joote, topi, daadhi
+  const s = h.spec, R = Math.random;
+  const v = {
+    top: s.top, bottom: s.bottom,
+    shoe: [0x2a1a10, 0x111111, 0x5a3a20, 0xf2f2f2, 0x3a3a3a][Math.floor(R() * 5)],
+    skinT: new THREE.Color(s.skin).lerp(new THREE.Color(0xffffff), 0.45).getHex(), // texture pe halka desi rang
+    hairT: new THREE.Color(s.hair ?? 0x111111).lerp(new THREE.Color(0xffffff), 0.25).getHex(),
+  };
+  const hat = s.hat ? true : R() < 0.35, beard = s.beard || s.stache || R() < 0.3;
   scene.traverse((o) => {
     if (!o.isMesh) return;
     o.castShadow = true; o.receiveShadow = false;
+    if (T.def.hat && o.name === T.def.hat) o.visible = hat;
+    if (T.def.beard && o.name === T.def.beard) o.visible = beard;
     const which = T.def.tint?.[o.name];
-    if (which && h.spec[which] != null) o.material = tinted(o.material, h.spec[which]);
+    if (which && v[which] != null) o.material = tinted(o.material, v[which], which === 'skinT' || which === 'hairT' ? 0 : 0.15);
   });
+  // lambai-chaudai thodi alag (procedural rig bhi saath mein, taaki pair zameen pe rahein)
+  const hs = s.female ? 0.92 + R() * 0.09 : 0.94 + R() * 0.12;
+  h.root.scale.multiplyScalar(hs);
   const B = findBones(scene);
   // purane procedural hisse chhupao
   for (const m of Object.values(h.meshes)) m.visible = false;

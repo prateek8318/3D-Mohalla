@@ -30,7 +30,7 @@ function makeCar(taxi) {
     add(new THREE.BoxGeometry(0.3, 0.14, 0.04), HDR(2.5, 0.15, 0.1), sx, 0.82, 2.17);
   }
   const wheels = [[-0.86, -1.35], [0.86, -1.35], [-0.86, 1.35], [0.86, 1.35]].map(([x, z]) => add(wheelGeo, tyre, x, 0.38, z));
-  return { g, wheels, seat: new THREE.Vector3(0.38, 0.32, 0.1), passenger: new THREE.Vector3(-0.38, 0.32, 0.1), len: 4.4, radius: 1.25, max: 17, kind: taxi ? 'taxi' : 'car' };
+  return { g, wheels, seat: new THREE.Vector3(0.38, 0.32, 0.1), passenger: new THREE.Vector3(-0.38, 0.32, 0.1), len: 4.4, radius: 1.25, max: 25, accel: 28, kind: taxi ? 'taxi' : 'car' };
 }
 
 function makeScooter() {
@@ -45,7 +45,7 @@ function makeScooter() {
   add(new THREE.SphereGeometry(0.1, 10, 8), HDR(1.8, 1.7, 1.3), 0, 1.4, -0.66);
   const w1 = add(new THREE.CylinderGeometry(0.24, 0.24, 0.12, 12), tyre, 0, 0.24, -0.62); w1.rotation.z = Math.PI / 2;
   const w2 = add(new THREE.CylinderGeometry(0.24, 0.24, 0.12, 12), tyre, 0, 0.24, 0.6); w2.rotation.z = Math.PI / 2;
-  return { g, wheels: [], seat: new THREE.Vector3(0, 0.5, 0.25), passenger: new THREE.Vector3(0, 0.55, 0.75), len: 1.8, radius: 0.6, max: 13, kind: 'scooter' };
+  return { g, wheels: [], seat: new THREE.Vector3(0, 0.5, 0.25), passenger: new THREE.Vector3(0, 0.55, 0.75), len: 1.8, radius: 0.6, max: 20, accel: 26, kind: 'scooter' };
 }
 
 function makeAuto() {
@@ -53,7 +53,7 @@ function makeAuto() {
   g.userData.driver.visible = false;
   g.remove(g.userData.glow);
   g.children.filter((c) => c.isPointLight).forEach((l) => g.remove(l));
-  return { g, wheels: g.userData.wheels, seat: new THREE.Vector3(0, 0.72, -0.5), passenger: new THREE.Vector3(0.45, 0.42, 0.95), len: 3.4, radius: 1.0, max: 14, kind: 'auto' };
+  return { g, wheels: g.userData.wheels, seat: new THREE.Vector3(0, 0.72, -0.5), passenger: new THREE.Vector3(0.45, 0.42, 0.95), len: 3.4, radius: 1.0, max: 20, accel: 24, kind: 'auto' };
 }
 
 // ---------- 💪 TAGDI GAADIYAN — har ek ka apna mission (missions.js → forVehicle) ----------
@@ -74,7 +74,7 @@ function makeMafia() {
     add(new THREE.BoxGeometry(0.34, 0.16, 0.04), HDR(2.5, 0.1, 0.1), sx, 1.0, 2.31);
   }
   const wheels = [[-0.9, -1.5], [0.9, -1.5], [-0.9, 1.5], [0.9, 1.5]].map(([x, z]) => add(bigWheel, tyre, x, 0.46, z));
-  return { g, wheels, seat: new THREE.Vector3(0.42, 0.5, 0.05), passenger: new THREE.Vector3(-0.42, 0.5, 0.05), len: 4.7, radius: 1.35, max: 23, accel: 30, kind: 'mafia' };
+  return { g, wheels, seat: new THREE.Vector3(0.42, 0.5, 0.05), passenger: new THREE.Vector3(-0.42, 0.5, 0.05), len: 4.7, radius: 1.35, max: 32, accel: 36, kind: 'mafia' };
 }
 // 🚑 Ambulance — upar laal-neeli batti (siren)
 function makeAmbulance() {
@@ -94,7 +94,7 @@ function makeAmbulance() {
   add(new THREE.BoxGeometry(1.9, 0.16, 0.16), chrome, 0, 0.45, -2.6);
   for (const sx of [-0.65, 0.65]) add(new THREE.CircleGeometry(0.15, 12), HDR(1.8, 1.7, 1.3), sx, 0.9, -2.56).rotation.y = Math.PI;
   const wheels = [[-0.9, -1.6], [0.9, -1.6], [-0.9, 1.5], [0.9, 1.5]].map(([x, z]) => add(wheelGeo, tyre, x, 0.38, z));
-  return { g, wheels, seat: new THREE.Vector3(0.42, 0.45, -1.55), passenger: new THREE.Vector3(-0.42, 0.45, -1.55), len: 5.2, radius: 1.3, max: 19, kind: 'ambulance', siren: [sirR, sirB] };
+  return { g, wheels, seat: new THREE.Vector3(0.42, 0.45, -1.55), passenger: new THREE.Vector3(-0.42, 0.45, -1.55), len: 5.2, radius: 1.3, max: 27, accel: 30, kind: 'ambulance', siren: [sirR, sirB] };
 }
 // 🏎️ Sports car — neechi, laal, spoiler wali, sabse tez
 function makeSports() {
@@ -111,7 +111,7 @@ function makeSports() {
     add(new THREE.BoxGeometry(0.45, 0.08, 0.04), HDR(2.5, 0.1, 0.1), sx, 0.62, 2.21);
   }
   const wheels = [[-0.88, -1.35], [0.88, -1.35], [-0.88, 1.35], [0.88, 1.35]].map(([x, z]) => add(wheelGeo, tyre, x, 0.36, z));
-  return { g, wheels, seat: new THREE.Vector3(0.38, 0.1, 0.4), passenger: new THREE.Vector3(-0.38, 0.1, 0.4), len: 4.4, radius: 1.25, max: 28, accel: 38, kind: 'sports' };
+  return { g, wheels, seat: new THREE.Vector3(0.38, 0.1, 0.4), passenger: new THREE.Vector3(-0.38, 0.1, 0.4), len: 4.4, radius: 1.25, max: 40, accel: 46, kind: 'sports' };
 }
 const MAKE = { taxi: () => makeCar(true), car: () => makeCar(false), auto: makeAuto, scooter: makeScooter, mafia: makeMafia, ambulance: makeAmbulance, sports: makeSports };
 function rollKind() {
@@ -155,7 +155,7 @@ export function buildTraffic(scene, { isTouch }) {
     setAction(driver, 'drive');
     v.g.add(driver.root);
     Object.assign(v, {
-      driver, ai: true, route, dir: R() < 0.5 ? 1 : -1, s: route.from + R() * (route.to - route.from), speed: 0, cruise: v.max * (0.4 + R() * 0.2),
+      driver, ai: true, route, dir: R() < 0.5 ? 1 : -1, s: route.from + R() * (route.to - route.from), speed: 0, cruise: v.max * (0.28 + R() * 0.14),
       pos: new THREE.Vector3(), heading: 0, uturn: null, stuck: 0, honkCd: 0,
     });
     placeOnRoute(v);

@@ -43,19 +43,37 @@ function laneProject(x, z) {
   return { lane: best, f: bf, d: bd };
 }
 const SHOP_KEEPERS = {
-  mithai: { old: true, outfit: 'kurta', top: 0xfff6e0, stache: true, hat: 'topi' },
-  barber: { outfit: 'shirt', top: 0xffffff, hairStyle: 'salman', stache: true },
-  chai: { outfit: 'lungi', top: 0xf2e6d0, bottom: 0x3a6a8a },
-  paan: { outfit: 'kurta', top: 0xffffff, old: true, stache: true },
+  mithai: { old: true, outfit: 'kurta', top: 0xfff6e0, stache: true, hat: 'topi', apron: 0xfff3d6, belly: 1 }, // halwai 🍬
+  barber: { outfit: 'shirt', top: 0xffffff, hairStyle: 'salman', stache: true, gamchha: true },
+  chai: { outfit: 'lungi', top: 0xf2e6d0, bottom: 0x3a6a8a, gamchha: true, stache: true },
+  paan: { outfit: 'kurta', top: 0xffffff, old: true, stache: true, tilak: 'lal', gamchha: true },
   dj: { outfit: 'tshirt', top: 0x111111, print: 0xff3d7f, shades: true, hairStyle: 'spiky' },
-  dhaba: { outfit: 'tshirt', top: 0xff9a1f, stache: true },
-  std: { outfit: 'shirt', top: 0xc8b28a, old: true },
-  video: { outfit: 'shirt', top: 0x7a4ab0, hairStyle: 'salman', stache: true },
-  kirana: { outfit: 'kurta', top: 0xffffff, old: true, hat: 'topi' },
-  golgappa: { outfit: 'shirt', top: 0x2f6fd0, hat: 'cap' },
+  dhaba: { outfit: 'tshirt', top: 0xff9a1f, stache: true, apron: 0xf4f0e6, belly: 1, hat: 'pagdi', pagdiColor: 0x1565c0 }, // sardar ji ka dhaba
+  std: { outfit: 'shirt', top: 0xc8b28a, old: true, specs: true },
+  video: { outfit: 'shirt', top: 0x7a4ab0, hairStyle: 'salman', stache: true, shades: true },
+  kirana: { outfit: 'kurta', top: 0xffffff, old: true, hat: 'topi', belly: 1, specs: true, gamchha: true }, // lala ji
+  golgappa: { outfit: 'shirt', top: 0x2f6fd0, hat: 'cap', gamchha: true, apron: 0xf4f0e6 },
   hotel: { outfit: 'jacket', top: 0x1a1a2a, bottom: 0x1a1a2a, stache: true, hairStyle: 'side' },
 };
-const COP = { outfit: 'police', top: 0xb59a63, bottom: 0xa88c55, hat: 'police', stache: true, hairStyle: 'short' };
+const COP = { role: 'police' };
+// 💃 har ladki ka apna andaaz — ek se badh kar ek
+const GIRL_LOOKS = {
+  Pinky: { outfit: 'crop', top: 0xff4f9b, bottom: 0x1f3358, hairStyle: 'pony', tie: 0xff4f9b, hoops: true, shades: true, skin: 0xd09b6a },
+  Sweety: { outfit: 'lehenga', top: 0xd81b60, bottom: 0xffd23f, dupatta: 0xff4081, hairStyle: 'bun', gajra: true, tikka: true, bangles: true, skin: 0xc68642 },
+  Rani: { outfit: 'saree', top: 0xffc23a, bottom: 0xc2185b, hairStyle: 'open', nath: true, tikka: true, bangles: true, skin: 0xb9774a },
+  Neha: { outfit: 'jeans', top: 0xffffff, bottom: 0x3d6aa0, hairStyle: 'open', specs: true, skin: 0xd09b6a },
+  Pooja: { outfit: 'salwar', top: 0xfdd835, bottom: 0x2e7d32, dupatta: 0x2e7d32, hairStyle: 'choti', gajra: true, bangles: true, skin: 0xe0ac7e },
+  Kajal: { outfit: 'saree', top: 0x111111, bottom: 0x6a1b9a, hairStyle: 'bun', gajra: true, hoops: true, skin: 0xc68642 },
+  Priya: { outfit: 'lehenga', top: 0x00897b, bottom: 0xff7a00, dupatta: 0xffd23f, hairStyle: 'pony', tie: 0xffd23f, nath: true, bangles: true, skin: 0xa0673a },
+  Sonam: { outfit: 'crop', top: 0xe53935, bottom: 0x16213a, hairStyle: 'open', hoops: true, skin: 0xb9774a },
+  Anjali: { outfit: 'salwar', top: 0x4fc3f7, bottom: 0xffffff, dupatta: 0xffffff, hairStyle: 'pony', tie: 0x4fc3f7, bangles: [0x4fc3f7, 0xffffff, 0x4fc3f7], skin: 0xd09b6a },
+  Dimple: { outfit: 'crop', top: 0xffd23f, bottom: 0xf2f2f2, hairStyle: 'bun', hoops: true, shades: true, skin: 0xe0ac7e },
+  Guddi: { outfit: 'salwar', top: 0xff7a00, bottom: 0xff4081, dupatta: 0xff4081, hairStyle: 'choti', gajra: true, nath: true, skin: 0xa0673a },
+  Babli: { outfit: 'lehenga', top: 0xff80ab, bottom: 0x7b1fa2, dupatta: 0xff80ab, hairStyle: 'open', tikka: true, nath: true, bangles: true, skin: 0xc68642 },
+  Komal: { outfit: 'saree', top: 0xffd23f, bottom: 0x2e7d32, hairStyle: 'bun', gajra: true, bangles: true, skin: 0xb9774a },
+  Reshma: { outfit: 'salwar', top: 0x880e4f, bottom: 0xffc83d, dupatta: 0xffc83d, hairStyle: 'open', nath: true, hoops: true, skin: 0xd09b6a },
+  Simran: { outfit: 'jeans', top: 0x8e24aa, bottom: 0x1f3358, hairStyle: 'pony', tie: 0xffffff, shades: true, skin: 0xe0ac7e },
+};
 
 export function buildNPCs(scene, { world, places2, isTouch }) {
   const npcs = [];
@@ -76,14 +94,14 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
     const female = R() < 0.5;
     const kid = R() < 0.14;
     const old = !kid && R() < 0.15;
-    const modern = female && !kid && !old && R() < 0.45;
+    const gname = female && !kid && !old ? GIRL_NAMES[girlI++ % GIRL_NAMES.length] : null;
     const h = makeHuman(kid ? { kid, female, outfit: female ? 'frock' : 'shirt', top: 0xffffff, bottom: 0x1f2f5a }
-      : modern ? { female, outfit: pick(['jeans', 'crop', 'jeans', 'tshirt']), top: pick([0x111111, 0xff3d7f, 0xffffff, 0xb14bff, 0xffd23f, 0xd94848, 0x2ef2ff]), hairStyle: pick(['long', 'long', 'bun']), shades: R() < 0.45 }
+      : gname ? { female: true, ...(GIRL_LOOKS[gname] || {}) }
         : { female, old });
     const f = R();
     const n = add(h, { type: 'walker', lane, f, kidW: kid, dir: R() < 0.5 ? 1 : -1, speed: kid ? 1.6 : old ? 0.9 : rnd(1.15, 1.5), off: rnd(-0.45, 0.45), x: 0, z: 0 });
     h.speed = n.speed;
-    if (female && !kid && !old) n.girl = { name: GIRL_NAMES[girlI++ % GIRL_NAMES.length], rejected: 0, affinity: rnd(0, 0.15), gf: false, slapped: 0 };
+    if (gname) n.girl = { name: gname, rejected: 0, affinity: rnd(0, 0.15), gf: false, slapped: 0 };
     n.canDance = !old && R() < 0.75;
     if (!kid && !old && R() < 0.24) { hold(h, itemMesh('cig')); n.smoker = true; n.smokeT = rnd(1, 8); }
     else if (!kid && R() < 0.12) hold(h, itemMesh(pick(['phone', 'cup', 'balloon'])));
@@ -110,7 +128,9 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
   const keepers = {};
   for (const k of world.keepers) {
     const spec = k.stall ? k.def.keeper : SHOP_KEEPERS[k.id] || {};
-    const h = makeHuman(spec);
+    // desi dukaandaar ko kandhe pe gamchha (agar khud kuch alag nahi pehna)
+    const desi = !spec.female && !spec.kid && !spec.role && (spec.outfit === 'kurta' || spec.outfit === 'lungi') && spec.apron == null;
+    const h = makeHuman(desi ? { gamchha: true, ...spec } : spec);
     if (k.id === 'barber') hold(h, itemMesh('scissors'));
     if (k.id === 'chai') hold(h, itemMesh('cup'));
     const n = add(h, { type: 'keeper', id: k.id, x: k.x, z: k.z, heading: k.heading, home: { x: k.x, z: k.z, heading: k.heading }, info: k, waveT: 0, near: false });
@@ -126,7 +146,7 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
   }
 
   // ---------- GHAT ----------
-  const priest = add(makeHuman({ outfit: 'kurta', top: 0xff8c1a, bottom: 0xfff5e0, stache: true, beard: true, old: true }), { type: 'priest', x: -6, y: 0.03, z: -118.5, heading: 0 });
+  const priest = add(makeHuman({ role: 'pandit' }), { type: 'priest', x: -6, y: 0.03, z: -118.5, heading: 0 });
   hold(priest.h, itemMesh('thali'));
   for (let i = 0; i < 5; i++) {
     const n = add(makeHuman({ female: i % 2 === 0 }), { type: 'static', x: -10 + i * 2, y: 0.03, z: -110.5, heading: 0 });

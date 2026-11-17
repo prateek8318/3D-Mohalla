@@ -135,6 +135,11 @@ function roleOf(s) {
 // humans.js ka banda → asli model chadha do (model abhi load nahi hua to baad mein)
 export function wantModel(h) {
   if (h.spec.noModel || h.spec.kid) return; // bachche: chhota kiya bada model ajeeb lagta hai
+  // kirdaar (pandit, police, neta, maiya, dukaandaar, ladkiyan…) apne kapdon mein hi rahein — ek hi model
+  // sabko ek jaisa bana deta tha (topi/pagdi/kurta sab gayab). Model sirf aam shirt-pant wale bheed ke liye.
+  const s = h.spec;
+  if (s.female || s.old || s.role || (s.hat && s.hat !== 'cap') || !['shirt', 'tshirt', 'jacket'].includes(s.outfit)
+    || s.gamchha || s.apron != null || s.vest != null || s.garland || s.belly) return;
   if (!ready) { waiting.push(h); return; }
   attach(h);
 }

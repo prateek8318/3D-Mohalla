@@ -19,6 +19,7 @@ import { buildNPCs } from './npcs.js';
 import { makeHuman, updateHuman, setAction, setOverlay, hold, itemMesh } from './humans.js';
 import { peopleLOD } from './people.js';
 import { speak, setVoice, voiceOn, voiceSupported } from './voice.js';
+import { aiLine, aiFresh } from './ai.js';
 import { buildTraffic } from './traffic.js';
 import { buildHotel } from './hotel.js';
 import { buildMinimap } from './minimap.js';
@@ -65,7 +66,10 @@ function gaali(key) {
   return null;
 }
 const ui = (k) => gaali(k) || UI[L()][k];
-const fight = (k) => pv((state.level === 2 ? FIGHT18 : FIGHT)[L()][k] || FIGHT[L()][k]);
+const fightOld = (k) => pv((state.level === 2 ? FIGHT18 : FIGHT)[L()][k] || FIGHT[L()][k]);
+// 🤖 AI se naye-naye jhagde ke dialogue (na mile to purane)
+const FIGHT_SIT = { hijack: 'kisi ne iski gaadi chheen li, chilla raha hai', victim: 'kisi ne ise bina wajah maara, gussa hai', punched: 'isne player ko ghoonsa maara aur taana de raha hai', honk: 'gaadi wala horn baja ke beech sadak khade insaan ko daant raha hai' };
+const fight = (k) => FIGHT_SIT[k] ? aiLine(`fight:${k}:${L()}:${state.level}`, { who: 'mohalle ka aadmi', role: 'aam aadmi', situation: FIGHT_SIT[k], lang: L(), spicy: state.level === 2 }, () => fightOld(k)) : fightOld(k);
 const X = () => UIX[L()];
 
 // ---------- RENDERER ----------
@@ -221,6 +225,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Escape') { if (drawMap?.isBig()) drawMap.close(); else if (state.scene) endScene(); else if (state.cine) endCine(); else closeSheets(); }
   if (!started) return;
   if (e.repeat) return;
+  if (dialogKey(e.code)) { e.preventDefault(); return; }
   if (e.code === 'KeyE' && !state.open) interact();
   if (e.code === 'KeyF' && !state.open) toggleRide();
   if (e.code === 'KeyB') { if (state.open === 'bag') closeSheets(); else if (!state.open) openBag(); }
@@ -338,6 +343,8 @@ function openMusic(opts) {
 // ---------- GENERIC DIALOG (shop sheet reuse) ----------
 function say(text, sub) {
   const el = $('shopSay');
+  clearInterval(typeTimer); el.classList.remove('typing');
+  if ($('shop').classList.contains('talk') && !$('shop').classList.contains('hidden')) speak(text, { female: state.open === 'girl', priority: true });
   el.innerHTML = '';
   el.append(document.createTextNode(text));
   if (sub) { const s = document.createElement('small'); s.textContent = sub; el.append(s); }
@@ -345,15 +352,53 @@ function say(text, sub) {
   void el.offsetWidth;
   el.classList.add('pop');
 }
-function dialog({ kind, avatar, title, sub, line, options }) {
+// 💬 baat-cheet wale dialog (mission, ladki) — neeche subtitle jaisa, line type hoti dikhe + bole
+const TALK_KINDS = new Set(['story', 'girl']);
+let dlgTok = 0, typeTimer = 0;
+function typeLine(text, female) {
+  const el = $('shopSay');
+  clearInterval(typeTimer);
+  el.textContent = '';
+  let i = 0;
+  const chars = [...String(text)];
+  typeTimer = setInterval(() => {
+    i = Math.min(chars.length, i + 2);
+    el.textContent = chars.slice(0, i).join('');
+    if (i >= chars.length) clearInterval(typeTimer);
+  }, 18);
+  speak(text, { female, priority: true });
+}
+function dialog({ kind, avatar, title, sub, line, options, ai, female }) {
   closeSheets();
   state.open = kind;
+  const tok = ++dlgTok;
+  const talk = TALK_KINDS.has(kind);
+  $('shop').classList.toggle('talk', talk);
   $('shopAvatar').textContent = avatar;
   $('shopName').textContent = title;
   $('shopOwner').textContent = sub || '';
-  say(line || '');
   renderOptions(options);
   $('shop').classList.remove('hidden');
+  if (!talk) { say(line || ''); return; }
+  // 🤖 AI se taaza andaaz (max 2.5 sec) — warna likhi hui line
+  if (ai) {
+    $('shopSay').textContent = '…';
+    $('shopSay').classList.add('typing');
+    Promise.race([aiFresh({ ...ai, base: line, lang: L(), spicy: state.level === 2 }), new Promise((r) => setTimeout(() => r(null), 2500))])
+      .then((fresh) => { if (tok !== dlgTok || state.open !== kind) return; $('shopSay').classList.remove('typing'); typeLine(fresh || line || '', female); });
+  } else typeLine(line || '', female);
+}
+// ⌨️ dialog khula ho to: E/Enter = pehla option, 1-9 = woh option
+function dialogKey(code) {
+  if (!state.open || $('shop').classList.contains('hidden')) return false;
+  const btns = [...$('shopItems').querySelectorAll('button.opt')];
+  let i = -1;
+  if (code === 'Enter' || (code === 'KeyE' && $('shop').classList.contains('talk'))) i = 0;
+  const m = /^(Digit|Numpad)([1-9])$/.exec(code);
+  if (m && $('shop').classList.contains('talk')) i = +m[2] - 1;
+  if (i < 0 || !btns[i]) return false;
+  btns[i].click();
+  return true;
 }
 // label ke shuru ka emoji alag icon-tile mein — saaf, professional list
 const EMO = /^((?:\p{Extended_Pictographic}|\p{Regional_Indicator}{2}|[#*0-9]️?⃣)(?:️|\p{Emoji_Modifier}|‍\p{Extended_Pictographic}️?)*)\s*/u;
@@ -716,6 +761,10 @@ function interact() {
   openShop(nearest.def, nearest);
 }
 function shopGreeting(def) {
+  const respectful0 = ['mandir', 'masjid', 'ghat'].includes(def.id);
+  return aiLine(`shop:${def.id}:${L()}:${state.level}`, { who: def.owner || def.name[L()], role: `${def.name[L()]} ka maalik/dukaandaar`, situation: respectful0 ? 'koi aaya hai, aadar se swagat karo' : 'grahak dukaan pe aaya hai, apne andaaz mein swagat karo aur saaman bechne ki koshish', lang: L(), spicy: state.level === 2 && !respectful0 }, () => shopGreetingOld(def));
+}
+function shopGreetingOld(def) {
   const respectful = ['mandir', 'masjid', 'ghat'].includes(def.id);
   if (!respectful && state.level === 2 && Math.random() < 0.6) return pick(UI18[L()].shopGreet);
   return pick(state.level >= 1 && !respectful ? [...def.greet[L()], ...def.gaali[L()], ...def.gaali[L()]] : def.greet[L()]);
@@ -952,7 +1001,7 @@ function openGirl(n) {
     { n: '😘 Seeti maaro / chhedo', cls: 'danger', d: 'Galat baat — anjaam bhugtoge', on: () => tease(n) },
     { n: '👋 Bye', on: () => closeSheets() },
   ];
-  dialog({ kind: 'girl', avatar: g.gf ? '💞' : '👩', title: g.name, sub: g.gf ? 'Tumhari girlfriend' : `Mohalle ki ${g.name}`, line: g.slapped > 0 ? '…phir aa gaye? 😒' : pick(GIRL[L()].hello), options: opts });
+  dialog({ kind: 'girl', avatar: g.gf ? '💞' : '👩', title: g.name, sub: g.gf ? 'Tumhari girlfriend' : `Mohalle ki ${g.name}`, line: g.slapped > 0 ? '…phir aa gaye? 😒' : aiLine(`girl:${g.name}:${L()}:${!!g.gf}`, { who: g.name, role: g.gf ? 'player ki girlfriend, mohalle ki ladki' : 'mohalle ki ladki, player ko thoda jaanti hai', situation: g.gf ? 'boyfriend mila, pyaar se baat' : 'player paas aa ke baat karna chahta hai, thoda nakhra/sharam/mazaak', lang: L(), spicy: false }, () => pick(GIRL[L()].hello)), options: opts, female: true });
   n.talking = true;
   state.talkGirl = n;
 }
@@ -2786,6 +2835,7 @@ async function boot() {
     bubble: (tg, text, cls) => ui3d.bubble(tg, text, cls),
     shopPoint: (id) => { const tr = shopNames[id]; return { x: tr.x, z: tr.z, name: tr.def.name[L()] }; },
     destinations: () => DESTS, dropPoints: () => drops,
+    line: (key, req, fb) => aiLine(`${key}:${L()}:${state.level}`, { ...req, lang: L(), spicy: state.level === 2 }, fb),
     hospital: () => DESTS.find((d) => /Hospital/.test(d.name)) || { name: '🏥 City Hospital', ...roadPoint(HOSPITAL.x, -8) },
     holdItem: (k) => { hold(me, k ? itemMesh(k) : state.weapon ? itemMesh(state.weapon) : null); setOverlay(me, k || state.weapon ? 'hold' : null); },
     isDancing: () => state.mode === 'foot' && !!keys.KeyQ,

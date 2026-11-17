@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { makeHuman, updateHuman, setAction } from './humans.js';
 import { DRIVE, addBox } from './collide.js';
 
+// jodi ke rang: [mukhya, saath wala]
+const PAIRS = [[0xd81b60, 0xffd23f], [0x00897b, 0xff7a00], [0x8e24aa, 0xff80ab], [0xe53935, 0x111111], [0x1565c0, 0xffffff], [0xff7a00, 0x2e7d32]];
+
 // Mohalle mein aur bhi jode — benches/ghat/park pe baithe (saaf-suthra romance)
 const SPOTS = [
   { x: -128, z: 134, h: 0 },        // Gandhi Park
@@ -38,8 +41,10 @@ export function buildCouples(scene) {
     for (const x of [-0.85, 0.85]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.45, 0.5), M(0x5a3a22)); l.position.set(x, 0.22, 0); bench.add(l); }
     scene.add(bench);
 
-    const he = makeHuman({ female: false, old: Math.random() < 0.2 });
-    const she = makeHuman({ female: true, outfit: Math.random() < 0.5 ? 'saree' : 'salwar' });
+    // 💑 love birds: dono ke kapde match — door se hi jodi lage
+    const [c1, c2] = PAIRS[Math.floor(Math.random() * PAIRS.length)];
+    const she = makeHuman({ female: true, outfit: ['lehenga', 'saree', 'salwar', 'crop'][Math.floor(Math.random() * 4)], top: c1, bottom: c2, dupatta: c1, hairStyle: Math.random() < 0.5 ? 'open' : 'bun', gajra: true, bangles: true, nath: Math.random() < 0.5, hoops: Math.random() < 0.5 });
+    const he = makeHuman({ female: false, outfit: Math.random() < 0.5 ? 'shirt' : 'kurta', top: c1, bottom: Math.random() < 0.5 ? 0x1f3358 : 0xfff5e0, hairStyle: Math.random() < 0.5 ? 'salman' : 'side', shades: Math.random() < 0.4, noModel: true });
     const fx = -Math.sin(s.h), fz = -Math.cos(s.h), rx = Math.cos(s.h), rz = -Math.sin(s.h);
     // seat ke upar (hips seat ki oonchai pe), thoda peeche taaki ghutne aage latkein
     const bx = -fx * 0.06, bz = -fz * 0.06, SEAT_Y = 0.1;

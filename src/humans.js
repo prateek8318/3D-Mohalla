@@ -59,7 +59,8 @@ function headGeo(s) {
     parts.push(P(sph(0.008, 6, 4), 0xc0001a, [0, 0.172, -0.113])); // bindi
   } else parts.push(P(box(0.05, 0.012, 0.01), s.female ? 0xa0303a : 0x6a2a2a, [0, 0.062, -0.112]));
   const st = s.hairStyle;
-  const capG = (k = 0.5, sc = [0.97, 1.05, 1.04], y = 0.13) => P(sph(0.128, 14, 9, 0, Math.PI * 2, 0, Math.PI * k), hc, [0, y, 0.005], [0, 0, 0], sc);
+  // baal ki topi peeche jhuki hui — taaki maatha aur aankhein dikhein (pehle aankhon tak aa jaati thi)
+  const capG = (k = 0.5, sc = [0.97, 1.05, 1.04], y = 0.13) => P(sph(0.128, 14, 9, 0, Math.PI * 2, 0, Math.PI * k), hc, [0, y, 0.012], [0.62, 0, 0], sc);
   if (st === 'short' || st === 'side') {
     parts.push(capG(0.52));
     parts.push(P(box(0.17, 0.035, 0.05), hc, [st === 'side' ? 0.02 : 0, 0.212, -0.085], [0.3, 0, st === 'side' ? -0.15 : 0]));
@@ -87,10 +88,17 @@ function headGeo(s) {
     }
   } else if (st === 'bald') {
     parts.push(P(new THREE.TorusGeometry(0.11, 0.02, 5, 14, Math.PI), hc, [0, 0.11, 0.01], [Math.PI / 2, 0, Math.PI]));
-  } else if (st === 'long' || st === 'bun' || st === 'choti') {
+  } else if (st === 'long' || st === 'bun' || st === 'choti' || st === 'pony' || st === 'open') {
     parts.push(capG(0.56, [1.0, 1.06, 1.06]));
     parts.push(P(box(0.05, 0.03, 0.04), hc, [0.0, 0.215, -0.095], [0.3, 0, 0]));
-    if (st === 'long') {
+    if (st === 'pony') {
+      parts.push(P(sph(0.04, 8, 6), hc, [0, 0.22, 0.1]));
+      parts.push(P(new THREE.TorusGeometry(0.03, 0.01, 5, 10), s.tie ?? 0xff3d7f, [0, 0.215, 0.115], [0.6, 0, 0]));
+      parts.push(P(new THREE.ConeGeometry(0.05, 0.34, 8), hc, [0, 0.04, 0.15], [Math.PI - 0.25, 0, 0]));
+    } else if (st === 'open') { // khule lehrate baal + side maang
+      parts.push(P(box(0.25, 0.42, 0.08), hc, [0, -0.03, 0.09]));
+      for (const x of [-1, 1]) parts.push(P(box(0.05, 0.34, 0.08), hc, [x * 0.11, 0.0, -0.01], [0, 0, x * 0.06]));
+    } else if (st === 'long') {
       parts.push(P(box(0.23, 0.36, 0.07), hc, [0, 0.0, 0.09]));
       for (const x of [-1, 1]) parts.push(P(box(0.04, 0.24, 0.07), hc, [x * 0.105, 0.05, -0.02]));
     } else if (st === 'bun') {
@@ -118,11 +126,59 @@ function headGeo(s) {
     parts.push(P(sph(0.13, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.45), s.capColor ?? 0xd94848, [0, 0.14, 0]));
     parts.push(P(box(0.14, 0.012, 0.1), s.capColor ?? 0xd94848, [0, 0.2, -0.14]));
   } else if (s.hat === 'pagdi') {
-    parts.push(P(sph(0.145, 12, 9, 0, Math.PI * 2, 0, Math.PI * 0.55), 0xff8c1a, [0, 0.14, 0.01], [0, 0, 0], [1.05, 1.15, 1.08]));
+    // asli safa: lapet wali patti + upar gumbad + aage kalgi (pehle naak tak chehra dhak leta tha)
+    const pc = s.pagdiColor ?? 0xff8c1a, pd = darker(pc, 0.8);
+    parts.push(P(cyl(0.142, 0.13, 0.1, 16), pc, [0, 0.235, 0.008], [0.12, 0, 0]));
+    parts.push(P(sph(0.138, 14, 9, 0, Math.PI * 2, 0, Math.PI * 0.5), pc, [0, 0.275, 0.016], [0.12, 0, 0], [1, 0.62, 1]));
+    for (let i = 0; i < 3; i++) parts.push(P(new THREE.TorusGeometry(0.136 - i * 0.004, 0.012, 5, 18), pd, [0, 0.2 + i * 0.035, 0.004 + i * 0.004], [Math.PI / 2 + 0.12 + (i - 1) * 0.18, 0, 0]));
+    parts.push(P(sph(0.022, 8, 6), 0xffd23f, [0, 0.255, -0.142])); // aage ka nag
+    if (s.kalgi) parts.push(P(new THREE.ConeGeometry(0.012, 0.12, 5), 0xfff6e0, [0.02, 0.32, -0.12], [-0.3, 0, -0.2]));
+    parts.push(P(box(0.07, 0.2, 0.02), pc, [0.03, 0.12, 0.13], [0.15, 0, 0.1])); // peeche latakta chhor
+  } else if (s.hat === 'gandhi') {
+    // neta ji ki safed nav-topi (aage se peeche lambi)
+    parts.push(P(box(0.15, 0.06, 0.25), 0xfbfbf6, [0, 0.235, 0.0], [0.1, 0, 0]));
+    parts.push(P(box(0.025, 0.035, 0.24), 0xe6e6dd, [0, 0.275, 0.0], [0.1, 0, 0]));
+  }
+  if (s.shikha) parts.push(P(new THREE.ConeGeometry(0.018, 0.09, 6), hc === 0xd4d4d4 ? 0x9a9a9a : hc, [0, 0.27, 0.06], [0.7, 0, 0])); // pandit ki choti
+  // maathe pe tilak
+  if (s.tilak === 'tripund') {
+    for (let i = 0; i < 3; i++) parts.push(P(box(0.07 - i * 0.008, 0.006, 0.006), 0xfff2c8, [0, 0.181 + i * 0.01, -0.104 + i * 0.004], [-0.55, 0, 0]));
+    parts.push(P(sph(0.008, 6, 4), 0xd0001a, [0, 0.19, -0.107]));
+  } else if (s.tilak === 'lal') {
+    parts.push(P(box(0.012, 0.04, 0.006), 0xd0001a, [0, 0.19, -0.104], [-0.5, 0, 0]));
   }
   if (s.shades) {
     for (const x of [-1, 1]) parts.push(P(box(0.05, 0.03, 0.012), 0x0a0a0a, [x * 0.043, 0.135, -0.122]));
     parts.push(P(box(0.035, 0.008, 0.01), 0x0a0a0a, [0, 0.145, -0.124]));
+  } else if (s.specs) { // gol chashma
+    for (const x of [-1, 1]) {
+      parts.push(P(new THREE.TorusGeometry(0.024, 0.0045, 5, 14), 0x3a2a1a, [x * 0.043, 0.135, -0.124]));
+      parts.push(P(box(0.005, 0.005, 0.11), 0x3a2a1a, [x * 0.105, 0.14, -0.07]));
+    }
+    parts.push(P(box(0.02, 0.005, 0.005), 0x3a2a1a, [0, 0.14, -0.126]));
+  }
+  if (s.female && !s.kid) {
+    if (s.nath) { // naak ki nath
+      parts.push(P(new THREE.TorusGeometry(0.017, 0.0028, 5, 14), 0xffc83d, [0.018, 0.085, -0.128], [0, 0.5, 0]));
+      parts.push(P(sph(0.005, 5, 4), 0xff2d55, [0.03, 0.073, -0.13]));
+    }
+    if (s.tikka) { // maang tikka
+      parts.push(P(box(0.004, 0.06, 0.004), 0xffc83d, [0, 0.23, -0.1], [-0.6, 0, 0]));
+      parts.push(P(sph(0.013, 7, 5), 0xffc83d, [0, 0.198, -0.108]));
+      parts.push(P(sph(0.007, 5, 4), 0xff2d55, [0, 0.198, -0.12]));
+    }
+    if (s.hoops) for (const x of [-1, 1]) parts.push(P(new THREE.TorusGeometry(0.024, 0.004, 5, 14), 0xffc83d, [x * 0.117, 0.055, -0.004], [0, Math.PI / 2, 0]));
+    if (s.gajra) { // baalon mein mogra
+      const at = st === 'bun' ? [0, 0.16, 0.12, 0.075] : st === 'pony' ? [0, 0.215, 0.105, 0.05] : [0, 0.14, 0.08, 0.11];
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        parts.push(P(sph(0.013, 6, 4), i % 4 ? 0xfffdf0 : 0xff8fb0, [at[0] + Math.cos(a) * at[3], at[1] + Math.sin(a) * at[3], at[2] + 0.02]));
+      }
+    }
+    if (s.ghoonghat) { // pallu sar pe
+      parts.push(P(sph(0.148, 14, 9, 0, Math.PI * 2, 0, Math.PI * 0.55), s.pallu ?? s.bottom, [0, 0.13, 0.02], [0.75, 0, 0], [1.02, 1.08, 1.06]));
+      parts.push(P(box(0.26, 0.3, 0.03), s.pallu ?? s.bottom, [0, -0.02, 0.13], [-0.15, 0, 0]));
+    }
   }
   return merge(parts);
 }
@@ -132,7 +188,7 @@ function torsoGeo(s) {
   const bw = s.buff || 0, fem = s.female && !s.kid;
   const topD = darker(top, 0.88);
   // kamar (patli) → seena (chauda) → kandhe: putle jaisa ek capsule nahi
-  const crop = o === 'crop';
+  const crop = o === 'crop' || o === 'lehenga'; // lehenga ki choli bhi chhoti
   parts.push(P(cyl(fem ? 0.135 : 0.15, fem ? 0.145 : 0.155, 0.27, 12), crop ? s.skin : top, [0, 0.13, 0], [0, 0, 0], [1.08 + bw * 0.06, 1, 0.74]));
   if (crop) {
     parts.push(P(sph(0.008, 5, 4), darker(s.skin, 0.7), [0, 0.1, -0.106])); // naabhi
@@ -177,6 +233,48 @@ function torsoGeo(s) {
     for (const x of [-1, 1]) parts.push(P(box(0.08, 0.015, 0.06), 0x6a5a30, [x * 0.17, 0.5, 0], [0, 0, x * -0.2])); // epaulette
   }
   if (o === 'tshirt' && s.print) parts.push(P(box(0.14, 0.12, 0.01), s.print, [0, 0.33, -0.14]));
+  if (o === 'lehenga') { // choli ka sunehra kinara + kandhe pe dupatta
+    parts.push(P(new THREE.TorusGeometry(0.15, 0.01, 5, 18), 0xffc83d, [0, 0.27, 0], [Math.PI / 2, 0, 0], [1.08, 0.76, 1]));
+    parts.push(P(box(0.05, 0.62, 0.3), s.dupatta ?? 0xffd23f, [-0.02, 0.3, -0.005], [0, 0, -0.62]));
+  }
+  // 🫃 tond (thulla / neta)
+  if (s.belly) parts.push(P(sph(0.16, 12, 9), s.vest ?? top, [0, 0.17, -0.05], [0, 0, 0], [1.05, 0.95, 0.9 + s.belly * 0.15]));
+  // neta ki sadri (Nehru jacket)
+  if (s.vest != null) {
+    const vd = darker(s.vest, 0.85);
+    parts.push(P(cyl(0.16, 0.17, 0.32, 12), s.vest, [0, 0.21, 0], [0, 0, 0], [1.12, 1, 0.8 + (s.belly ? 0.08 : 0)]));
+    parts.push(P(sph(0.196, 14, 10, 0, Math.PI * 2, Math.PI * 0.18, Math.PI * 0.5), s.vest, [0, 0.35, 0], [0, 0, 0], [1.16, 0.95, 0.77]));
+    for (let i = 0; i < 4; i++) parts.push(P(sph(0.01, 5, 4), 0xd4af37, [0, 0.44 - i * 0.07, -0.152 - (s.belly && i > 1 ? 0.045 * (i - 1) : 0)]));
+    parts.push(P(cyl(0.066, 0.07, 0.04, 10), vd, [0, 0.535, 0]));
+  }
+  // pandit ki rudraksh mala
+  if (s.mala) for (let i = 0; i <= 16; i++) { // gale se seene tak latakti
+    const a = (i / 16) * Math.PI, sn = Math.sin(a);
+    parts.push(P(sph(0.013, 6, 4), 0x5a2e14, [Math.cos(a) * 0.085, 0.51 - sn * 0.2, -0.07 - sn * 0.085]));
+  }
+  // genda ki mala (neta / dulha)
+  if (s.garland) for (let i = 0; i < 22; i++) {
+    const a = (i / 22) * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a);
+    parts.push(P(sph(0.028, 7, 5), i % 2 ? 0xff8c00 : 0xffcf1a, [c * 0.12, sn < 0 ? 0.47 + sn * 0.24 : 0.5 + sn * 0.02, sn < 0 ? -0.1 + sn * 0.05 : -0.05 + sn * 0.12]));
+  }
+  // angvastra (kandhe pe dupatta)
+  if (s.angvastra != null) {
+    parts.push(P(box(0.06, 0.6, 0.025), s.angvastra, [0.07, 0.28, -0.13], [0.1, 0, 0.5]));
+    parts.push(P(box(0.07, 0.45, 0.02), s.angvastra, [0.15, 0.3, 0.12], [-0.1, 0, -0.3]));
+  }
+  // dukaandaar ka gamchha (kandhe pe laal-safed)
+  if (s.gamchha) {
+    for (const z of [-1, 1]) {
+      parts.push(P(box(0.09, 0.3, 0.015), 0xc62828, [0.13, 0.37, z * 0.13], [z * 0.15, 0, 0]));
+      parts.push(P(box(0.092, 0.025, 0.017), 0xffffff, [0.13, 0.3, z * 0.13 + z * 0.008], [z * 0.15, 0, 0]));
+    }
+    parts.push(P(box(0.1, 0.03, 0.27), 0xc62828, [0.13, 0.51, 0]));
+  }
+  if (s.apron != null) { // halwai/chai wale ka apron
+    parts.push(P(box(0.26, 0.34, 0.012), s.apron, [0, 0.2, -0.13 - (s.belly ? 0.06 : 0)]));
+    parts.push(P(box(0.008, 0.16, 0.006), s.apron, [0.06, 0.44, -0.12], [0, 0, -0.25]));
+    parts.push(P(box(0.008, 0.16, 0.006), s.apron, [-0.06, 0.44, -0.12], [0, 0, 0.25]));
+  }
   // 🦸 hero: sone ki chain
   if (s.hero) {
     parts.push(P(new THREE.TorusGeometry(0.078, 0.009, 5, 22), 0xffc83d, [0, 0.5, -0.03], [Math.PI / 2 - 0.55, 0, 0]));
@@ -191,6 +289,18 @@ function pelvisGeo(s) {
   if (o === 'saree') parts.push(P(cyl(0.17, 0.27, 0.9, 14), s.bottom, [0, -0.45, 0]));
   else if (o === 'lungi') parts.push(P(cyl(0.165, 0.2, 0.62, 12), s.bottom, [0, -0.33, 0]));
   else if (o === 'frock') parts.push(P(cyl(0.15, 0.3, 0.42, 12), s.top, [0, -0.2, 0]));
+  else if (o === 'lehenga') { // ghera lehenga + sunehri kinari
+    parts.push(P(cyl(0.165, 0.36, 0.93, 18), s.bottom, [0, -0.45, 0]));
+    parts.push(P(cyl(0.362, 0.368, 0.06, 18), 0xffc83d, [0, -0.89, 0]));
+    parts.push(P(cyl(0.255, 0.26, 0.025, 18), 0xffc83d, [0, -0.45, 0]));
+    parts.push(P(cyl(0.168, 0.168, 0.04, 14), 0xffc83d, [0, 0.03, 0], [0, 0, 0], [1.1, 1, 0.85]));
+  }
+  if (s.dhoti) { // pandit ki dhoti (pinddi tak)
+    parts.push(P(cyl(0.17, 0.22, 0.72, 12), s.bottom, [0, -0.36, 0]));
+    parts.push(P(box(0.05, 0.7, 0.02), darker(s.bottom, 0.9), [0, -0.36, -0.19], [-0.07, 0, 0]));
+    parts.push(P(cyl(0.222, 0.224, 0.03, 12), 0xd4af37, [0, -0.71, 0]));
+  }
+  if (s.apron != null) parts.push(P(box(0.27, 0.32, 0.012), s.apron, [0, -0.13, -0.15]));
   // patloon pe belt
   if (['shirt', 'tshirt', 'jacket', 'police', 'jeans', 'crop'].includes(o) && !s.kid) {
     parts.push(P(cyl(0.165, 0.165, 0.045, 14), o === 'police' ? 0x3a2410 : 0x231509, [0, 0.075, 0], [0, 0, 0], [1.1, 1, 0.84]));
@@ -225,6 +335,10 @@ function foreArmGeo(s) {
     P(sph(r * 1.02, 8, 6), c, [0, 0, 0]), // kohni
   ];
   if (full) parts.push(P(cyl(r * 0.92, r * 0.92, 0.03, 8), darker(s.top, 0.85), [0, -0.235, 0])); // cuff
+  if (s.bangles) { // kalaai pe rang-birangi chudiyan
+    const bc = Array.isArray(s.bangles) ? s.bangles : [0xd81b60, 0xffc83d, 0x00897b, 0xffc83d];
+    bc.forEach((c, i) => parts.push(P(new THREE.TorusGeometry(r * 0.95, 0.0055, 4, 12), c, [0, -0.2 - i * 0.011, 0], [Math.PI / 2, 0, 0])));
+  }
   // haath: hatheli + ungliyan + angootha (gola nahi)
   parts.push(P(box(0.07, 0.075, 0.032), s.skin, [0, -0.29, -0.006]));
   parts.push(P(box(0.066, 0.055, 0.028), s.skin, [0, -0.345, -0.016], [-0.35, 0, 0]));
@@ -240,7 +354,7 @@ function thighGeo(s) {
   ]);
 }
 function shinGeo(s) {
-  const lower = s.outfit === 'lungi' || s.outfit === 'frock' || (s.kid && s.outfit === 'shirt') ? s.skin : s.bottom;
+  const lower = s.outfit === 'lungi' || s.outfit === 'frock' || s.dhoti || (s.kid && s.outfit === 'shirt') ? s.skin : s.bottom;
   return merge([
     P(cyl(0.06, 0.045, 0.4, 10), lower, [0, -0.2, 0]),
     P(sph(0.055, 8, 6), lower, [0, -0.13, 0.018], [0, 0, 0], [1, 1.6, 1]), // pindli
@@ -269,7 +383,19 @@ function footGeo(s) {
 }
 
 // ---------------- the human ----------------
+// 🎭 har kirdaar ki pehchaan — door se hi samajh aaye kaun hai
+const MAIYA_SAREE = [0xfff6e0, 0xe8d8b0, 0x8d6e63, 0x5d4037, 0xc5e1a5, 0xb39ddb];
+export const ROLES = {
+  pandit: () => ({ outfit: 'kurta', top: 0xff8c1a, bottom: 0xfff5e0, old: true, stache: true, beard: true, hairStyle: 'bald', shikha: true, tilak: 'tripund', mala: true, angvastra: 0xffd23f, dhoti: true }),
+  police: () => ({ outfit: 'police', top: 0xb59a63, bottom: 0xa88c55, hat: 'police', stache: true, hairStyle: 'short', belly: Math.random() < 0.6 ? 1 : 0, shades: Math.random() < 0.3 }),
+  neta: () => ({ outfit: 'kurta', top: 0xffffff, bottom: 0xffffff, hat: 'gandhi', vest: pick([0xff8c1a, 0x1a1a1a, 0x2e7d32]), garland: true, stache: true, belly: 1, shades: true, buff: 0.2, tilak: 'lal' }),
+  maiya: () => { const c = pick(MAIYA_SAREE); return { female: true, old: true, outfit: 'saree', top: darker(c, 0.8), bottom: c, hairStyle: 'bun', ghoonghat: Math.random() < 0.7, specs: Math.random() < 0.6, bangles: [0xffc83d, 0xd81b60] }; },
+  dulha: () => ({ outfit: 'kurta', top: 0xfff0c8, bottom: 0xfff0c8, hat: 'pagdi', pagdiColor: 0xd81b60, kalgi: true, garland: true, stache: true }),
+};
+
 export function makeHuman(o = {}) {
+  if (o.role && ROLES[o.role]) o = { ...ROLES[o.role](), ...o };
+  else if (o.female && o.old && !o.kid && o.outfit === undefined) o = { ...ROLES.maiya(), ...o }; // har budhi amma = maiya
   const female = o.female ?? false, kid = o.kid ?? false;
   const s = {
     female, kid,
@@ -283,6 +409,10 @@ export function makeHuman(o = {}) {
     buff: o.buff ?? (!female && !kid && !o.old ? 0.5 + Math.random() * 0.5 : 0),
     beard: o.beard ?? false, hat: o.hat ?? null, shades: o.shades ?? false, print: o.print ?? null, dupatta: o.dupatta, capColor: o.capColor,
     old: !!o.old, hero: !!o.hero, inner: o.inner, noModel: !!o.noModel, modelIdx: o.modelIdx,
+    role: o.role ?? null, tie: o.tie, pagdiColor: o.pagdiColor, kalgi: !!o.kalgi, shikha: !!o.shikha, tilak: o.tilak ?? null, specs: !!o.specs,
+    nath: !!o.nath, tikka: !!o.tikka, hoops: !!o.hoops, gajra: !!o.gajra, ghoonghat: !!o.ghoonghat, pallu: o.pallu,
+    belly: o.belly ?? 0, vest: o.vest ?? null, mala: !!o.mala, garland: !!o.garland, angvastra: o.angvastra ?? null, gamchha: !!o.gamchha, apron: o.apron ?? null,
+    dhoti: !!o.dhoti, bangles: o.bangles ?? (female && !kid && ['saree', 'salwar', 'lehenga'].includes(o.outfit) && Math.random() < 0.7),
   };
   if (s.bottom === undefined) s.bottom = isModernF(s.outfit) ? pick(DENIM) : female ? pick(F_TOPS) : pick(M_BOTTOMS);
   if (isModernF(s.outfit) && o.hairStyle === undefined) s.hairStyle = pick(['long', 'long', 'bun']);

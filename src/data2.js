@@ -73,7 +73,7 @@ export const STALLS = [
   },
   {
     id: 'jyotish', x: -78, side: 1, color: '#ff5c97', sign: 'पंडित जी ज्योतिष', sub: 'हाथ दिखाओ, भविष्य जानो',
-    name: sg('Pandit Bhavishyavani', 'Pandit Bhavishyavani'), owner: 'Pandit ji', avatar: '🔮', keeper: { old: true, outfit: 'kurta', top: 0xff8c1a, hat: 'pagdi' },
+    name: sg('Pandit Bhavishyavani', 'Pandit Bhavishyavani'), owner: 'Pandit ji', avatar: '🔮', keeper: { role: 'pandit', hat: 'pagdi', pagdiColor: 0xff8c1a },
     greet: sg(['Haath dikhao bachcha, kismat ki rekha padhta hoon 🔮', 'Shani bhaari hai tumpe… upaay hai mere paas.'], ['Haath dekhaava babua, kismat ke rekha padhat bani 🔮', 'Shani bhaari ba tohra pe… upaay ba hamra lagge.']),
     gaali: sg(['Kismat to teri pehle se phooti hai 😂', 'Free mein bhavishya nahi batata, nikaal dakshina!'], ['Kismat ta tohar pahile se phootal ba 😂', 'Muft mein bhavishya na bataib, dakshina nikaal!']),
     items: [

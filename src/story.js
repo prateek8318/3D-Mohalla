@@ -184,6 +184,7 @@ export function createStory(ctx) {
       ctx.dialog({
         kind: 'story', avatar: '🅼', title: `Mission ${m.id}: ${m.title}`, sub: m.who,
         line: m.intro[ctx.lang()],
+        ai: { who: m.who, role: `mission dene wala (${m.who})`, situation: `player ko mission '${m.title}' de raha hai. Mission ka kaam aur inaam ₹${m.reward} same rehna chahiye.` },
         options: [
           { n: '▶ Mission shuru karo', cls: 'good', d: `Inaam ₹${m.reward} + Respect`, on: () => { ctx.close(); begin(); } },
           { n: '⏳ Baad mein', on: () => ctx.close() },

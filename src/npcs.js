@@ -577,7 +577,7 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
           n.waveCd -= dt;
           const d = Math.hypot(n.x - px, n.z - pz);
           if (d < 18 && n.waveCd <= 0) { n.waveCd = rnd(15, 30); n.waveT = 2; }
-          if (n.waveT > 0) { n.waveT -= dt; setAction(n.h, 'wave'); } else setAction(n.h, ctx.party && n.base !== 'clothes' ? 'dance' : n.base);
+          if (n.waveT > 0) { n.waveT -= dt; setAction(n.h, 'wave'); } else setAction(n.h, ctx.party && d < 30 && n.base !== 'clothes' ? 'dance' : n.base);
           lookAtPlayer(n, px, pz, 22);
           break;
         }

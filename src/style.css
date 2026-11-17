@@ -42,13 +42,13 @@ button { font-family: inherit; cursor: pointer; color: inherit; }
 .cloud-status { font-size: 13px; color: var(--muted); min-height: 1em; }
 .bak { display: block; margin: 14px 0 20px; color: var(--muted); font-size: 15px; }
 .bak input { accent-color: var(--pink); transform: scale(1.2); margin-right: 6px; }
-.big {
+button.big {
   font-size: 22px; font-weight: 800; padding: 14px 34px; border-radius: 16px; border: 0;
   background: linear-gradient(90deg, var(--orange), var(--pink)); box-shadow: 0 10px 40px rgba(255, 61, 127, .5);
   transition: transform .15s;
 }
-.big:hover:not(:disabled) { transform: translateY(-2px) scale(1.03); }
-.big:disabled { opacity: .6; cursor: wait; }
+button.big:hover:not(:disabled) { transform: translateY(-2px) scale(1.03); }
+button.big:disabled { opacity: .6; cursor: wait; }
 .keys { display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: center; margin-top: 20px; font-size: 13px; color: var(--muted); }
 .keys b { color: var(--text); }
 
@@ -411,3 +411,41 @@ body.dead #c { filter: grayscale(1) brightness(.75) contrast(1.1); transition: f
   .opt .n { font-size: 14.5px; }
 }
 @keyframes sheetUp { from { transform: translateY(40px); opacity: 0; } }
+
+
+/* ================= 🧭 GPS + naksha controls ================= */
+.gps-pill {
+  position: fixed; z-index: 13; left: 50%; top: 14px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 12px; border-radius: 16px;
+  background: linear-gradient(135deg, rgba(90, 40, 150, .92), rgba(40, 16, 70, .92)); border: 1px solid rgba(180, 107, 255, .6);
+  box-shadow: 0 8px 28px rgba(0,0,0,.45), 0 0 18px rgba(180, 107, 255, .35); font-family: var(--ui); cursor: pointer; max-width: 92vw;
+}
+.gps-pill .gi { font-size: 22px; }
+.gps-pill .gtx { display: flex; flex-direction: column; min-width: 0; }
+.gps-pill .gt { font-size: 15px; font-weight: 700; white-space: nowrap; }
+.gps-pill .gd { font-size: 12px; color: #e3d0ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gps-pill .gx { width: 28px; height: 28px; border-radius: 50%; border: 0; background: rgba(255,255,255,.14); color: #fff; font-size: 12px; flex: none; }
+.mission:not(.hidden) ~ .gps-pill { top: 14px; }
+.opt.has-nav { grid-template-columns: 42px 1fr auto auto; }
+.navbtn { padding: 5px 10px; border-radius: 999px; background: rgba(180, 107, 255, .18); border: 1px solid rgba(180, 107, 255, .5); color: #e9dbff; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.navbtn:hover { background: rgba(180, 107, 255, .4); }
+.mm-ctrls, .mm-navcard { display: none; }
+.minimap.big .mm-ctrls { display: flex; flex-direction: column; gap: 6px; position: absolute; right: 12px; bottom: 14px; z-index: 2; }
+.mm-ctrls button { width: 42px; height: 42px; border-radius: 12px; border: 1px solid rgba(255,255,255,.18); background: rgba(20, 10, 36, .88); color: #fff; font-size: 20px; font-weight: 700; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+.mm-ctrls button:hover { background: rgba(255, 61, 127, .5); }
+.minimap.big .mm-navcard:not(.hidden) { display: flex; flex-direction: column; position: absolute; left: 12px; bottom: 14px; z-index: 2; padding: 9px 14px; border-radius: 14px; background: rgba(60, 24, 100, .92); border: 1px solid rgba(180, 107, 255, .6); font-family: var(--ui); }
+.mm-navcard b { font-size: 14px; }
+.mm-navcard span { font-size: 12.5px; color: #e3d0ff; }
+.minimap.big .mm-head { pointer-events: none; }
+.mm-acts { display: flex; gap: 6px; align-items: center; pointer-events: auto; }
+.mm-acts button.mm-go, .mm-acts button.mm-clr { pointer-events: auto; padding: 7px 12px; border-radius: 999px; border: 0; font-family: var(--ui); font-weight: 700; font-size: 12.5px; color: #fff; }
+.mm-go { background: linear-gradient(135deg, var(--orange), var(--pink)); }
+.mm-clr { background: rgba(255,255,255,.14); }
+.mm-acts .hidden { display: none !important; }
+.minimap.big { cursor: grab; touch-action: none; }
+@media (max-width: 600px) {
+  .gps-pill { top: 112px; padding: 5px 6px 5px 10px; }
+  .gps-pill .gt { font-size: 13px; }
+  .mm-head small { display: none; }
+  .mm-acts button.mm-go, .mm-acts button.mm-clr { padding: 6px 9px; font-size: 11.5px; }
+}

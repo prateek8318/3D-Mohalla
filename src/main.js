@@ -16,6 +16,7 @@ import { buildCouples } from './couples.js';
 import { createEyeLock } from './eyelock.js';
 import { buildNPCs } from './npcs.js';
 import { makeHuman, updateHuman, setAction, setOverlay, hold, itemMesh } from './humans.js';
+import { peopleLOD } from './people.js';
 import { buildTraffic } from './traffic.js';
 import { buildHotel } from './hotel.js';
 import { buildMinimap } from './minimap.js';
@@ -27,6 +28,8 @@ import { createWeapons, GUNS } from './weapons.js';
 import { createStory } from './story.js';
 import { cloud } from './cloud.js';
 import { buildDistricts, HOSPITAL } from './districts.js';
+import { findRoute, routeLength } from './nav.js';
+import { signTexture } from './textures.js';
 import { ZONES } from './collide.js';
 import { ROOF, LIFT } from './hotel.js';
 import { makeEnv, computeEnv, clockLabel, phase, RetroShader, HOUR_SECONDS } from './daytime.js';
@@ -470,8 +473,12 @@ function openPlaces() {
     const box = mk('div', 'opts');
     for (const p of items) {
       const d = p.dist < 1000 ? `${Math.round(p.dist)} m` : `${(p.dist / 1000).toFixed(1)} km`;
-      const row = optRow({ n: p.label, d: p.drive ? '🛺 Gaadi ke saath' : '🚶 Paidal', right: d, on: () => { teleport(p); closeSheets(); toast(`📍 ${splitIcon(p.label)[1]}`, 1500); } });
+      const row = optRow({ n: p.label, d: (p.drive ? '🛺 Gaadi ke saath' : '🚶 Paidal') + ' • tap = seedha pahuncho', right: d, on: () => { teleport(p); closeSheets(); toast(`📍 ${splitIcon(p.label)[1]}`, 1500); } });
       row.dataset.q = p.label.toLowerCase();
+      const nb = document.createElement('span');
+      nb.className = 'navbtn'; nb.textContent = '🧭 GPS'; nb.title = 'GPS raasta dikhao';
+      nb.onclick = (e) => { e.stopPropagation(); closeSheets(); setGps(p.x, p.z, splitIcon(p.label)[1]); };
+      row.classList.add('has-nav'); row.appendChild(nb);
       box.appendChild(row);
     }
     list.append(sec, box);
@@ -571,6 +578,7 @@ function enterRick(force = false) {
     const n = npcs.adoptWalker(d, sx, sz, walker.pos);
     setAction(d, 'idle');
     if (Math.random() < 0.5) n.angryPending = false;
+    if (v.kind === 'mafia') { n.angry = 12; n.pause = 0; } // mafia ka driver chup nahi baithega 😡
     toast(fight('hijack'), 2600);
     noise(0.1, 0.2, 600);
     if (npcs.cops.some((c) => Math.hypot(c.x - v.pos.x, c.z - v.pos.z) < 35)) addWanted(1);
@@ -587,6 +595,7 @@ function enterRick(force = false) {
   setAction(me, 'drive');
   hold(me, null);
   camYaw = 0;
+  if (v !== ownCar) missions.forVehicle(v); // 🚑/🖤/🏎️ gaadi ke hisaab se mission
 }
 function toggleRide() {
   if (state.cine || state.seq?.type === 'salon') return;
@@ -814,14 +823,12 @@ function buy(def, it, trig) {
       startEat({ ...it, fx: null, mesh: it.mesh });
       toast(pick(BAR[Lg].drunk), 2500);
       return;
-    case 'room':
-      closeSheets();
-      flash('love');
-      state.realTime = false;
-      state.tod = 7 / 24;
-      state.turboUntil = t + 60;
-      toast(SCENES[Lg].room, 3500);
+    case 'room': {
+      // 🛏️ asli kamra: (gf ho to) slow dance → 10 sec neend → subah
+      const gfR = npcs.girls().find((g) => g.girl.gf);
+      runScene(roomScene(gfR || null));
       return;
+    }
     case 'diya': world.releaseDiyas(10); break;
     case 'shayari': shopReact(def, trig, pick(SHAYARI[Lg]), { cls: 'love' }); flash('love'); return;
     case 'fortune': line = pick(FORTUNES[Lg]); break;
@@ -908,7 +915,16 @@ function openGirl(n) {
   const g = n.girl;
   const opts = g.gf ? [
     { n: '💞 Saath chalo', d: 'Tumhare peeche peeche', on: () => { closeSheets(); meSay('Chalo mere saath 😊'); setTimeout(() => girlReact(n, GIRL[L()].already, { cls: 'love' }), 700); } },
-    { n: '🤗 Jhappi (hug)', on: () => runScene(hugScene(n)) },
+    { n: '🤗 Jhappi (hug)', d: 'Kas ke gale lagao', on: () => runScene(hugScene(n)) },
+    { n: '💋 Kiss karo', d: 'Ek pyaari si pappi 😘', on: () => runScene(kissScene(n)) },
+    { n: '🛏️ Hotel room chalo', p: 250, d: 'Kamre mein slow dance + saath mein neend → subah', on: () => {
+      if (state.money < 250) return say('Jeb khaali hai jaanu… ₹250 chahiye 😅');
+      setMoney(state.money - 250); coinSfx(); runScene(roomScene(n));
+    } },
+    { n: '💃 Saath naacho', p: 60, d: 'Hotel ke dance floor pe couple dance', on: () => {
+      if (state.money < 60) return say('₹60 bhi nahi hai? 😒');
+      setMoney(state.money - 60); runScene(danceScene(n));
+    } },
     { n: '🌙 Ghat pe chalo', d: 'Filmy shaam', on: () => { closeSheets(); goGhatWith(n); } },
     { n: '🏨 Hotel date', d: 'Dinner / Dance', on: () => { closeSheets(); teleport({ x: hotel.center.x - 4, z: hotel.center.z + 4, h: 0 }); n.x = walker.pos.x + 1; n.z = walker.pos.z; toast('🏨 Hotel Raj Palace — Manager se dinner book karo 🕯️', 3000); } },
     { n: '🎁 Gift do', on: () => giveGift(n) },
@@ -971,9 +987,24 @@ function propose(n) {
     }
   }, 1300);
 }
+// 😏 18+ mode: tapori / chhichhora lines (ladki chaanta maarti hai + police)
+const TAPORI = {
+  hi: ['Oye hoye! Chalogi kya 9 se 12 picture dekhne? 🍿😏', 'Kya item hai yaar! Number milega kya? 📞😜', 'Akeli ho kya jaaneman? Bike pe chalogi? 🏍️😏', 'Oye chhammak chhallo! Chai pe chalogi? ☕😉', 'Ek smile de do, raat bhar neend nahi aayegi 😘', 'Tera ghar aaya, mera dil ghabraya… 😏🎶', 'Madam, aapke papa chor the kya? Saare taare chura ke aankhon mein daal diye 😜', 'Aye patakha! Aaj raat free ho kya? 😏'],
+  bho: ['Ae hoye! Chalbu ka 9 se 12 picture dekhe? 🍿😏', 'Ka item baadu! Number mili ka? 📞😜', 'Akele baadu ka jaan? Bike pe chalbu? 🏍️😏', 'Ae chhammak chhallo! Chai pe chalbu? ☕😉', 'Ek muskaan de da, raat bhar neend na aai 😘', 'Tohar ghar aail, hamar dil ghabrail… 😏🎶', 'Ae patakha! Aaj raat free baadu ka? 😏'],
+};
+const SEETI18 = { hi: ['😗🎶 Wheeew! Aye hoye, kya chaal hai!', '😏 Oye hoye! Kahan chali sawaari?', '😗 Seeti! Ek baar mud ke toh dekho!'], bho: ['😗🎶 Wheeew! Ae hoye, ka chaal ba!', '😏 Ae hoye! Kahan chalalu?', '😗 Seeti! Ek beri mud ke ta dekha!'] };
 function pickup(n) {
   const g = n.girl, r = Math.random();
   closeSheets();
+  if (state.level === 2) {
+    meSay(`"${pick(TAPORI[L()])}"`);
+    setTimeout(() => {
+      if (r < 0.08 + g.affinity * 0.15) { g.affinity += 0.05; girlReact(n, pick(GIRL[L()].laugh), { cls: 'love' }); }
+      else if (r < 0.45) { g.rejected += 1; girlReact(n, girlLine('no'), { cls: 'loud', act: 'point' }); }
+      else { slap(n); if (Math.random() < 0.4) { addWanted(1); setTimeout(() => toast(POLICE[L()].tease, 2600), 1800); } }
+    }, 1100);
+    return;
+  }
   meSay(`"${pick(PICKUP[L()])}"`);
   setTimeout(() => {
     if (r < 0.25 + g.affinity * 0.3) { g.affinity += 0.08; girlReact(n, pick(GIRL[L()].laugh), { cls: 'love' }); }
@@ -985,7 +1016,7 @@ function whistleSfx() { glide(1800, 2600, 0.18, 'sine', 0.06); glide(2600, 1500,
 function tease(n) {
   closeSheets();
   whistleSfx();
-  meSay('😗🎶 Wheeew-wheew!');
+  meSay(state.level === 2 ? pick(SEETI18[L()]) : '😗🎶 Wheeew-wheew!');
   setTimeout(() => slap(n), 700);
   addWanted(1);
   setTimeout(() => toast(POLICE[L()].tease, 2600), 2000);
@@ -1077,10 +1108,20 @@ function runScene(sc) {
   $('mAct').classList.add('hidden');
   sc.setup();
 }
+// scene ne khud gaana chalaya ho to scene ke saath hi band — warna party mode on rehta aur poora mohalla naachta rehta
+let sceneMusicTok = 0;
+function stopSceneMusic() { if (music.mode === 'file' && !music.audio.paused) music.audio.pause(); }
+function startSceneMusic(qs) {
+  if (music.playing || !state.scene) return;
+  const tok = ++sceneMusicTok;
+  state.scene.music = tok;
+  musicUI.autoPlay(pick(qs)).then(() => { if (!state.scene || state.scene.music !== tok) stopSceneMusic(); });
+}
 function endScene() {
   const s = state.scene;
   if (!s) return;
   s.end();
+  if (s.music) stopSceneMusic();
   state.scene = null;
   state.open = null;
   state.realTime = state.rtPref;
@@ -1152,7 +1193,7 @@ function danceScene(gf) {
     setup() {
       nightify();
       gf.scene = true;
-      if (!music.playing) musicUI.autoPlay(pick(['hindi romantic', 'bollywood love song', 'romantic hindi']));
+      startSceneMusic(['hindi romantic', 'bollywood love song', 'romantic hindi']);
       walker.pos.set(F.x + 0.6, 0, F.z); walker.heading = Math.PI / 2;
       placeHuman(me, F.x + 0.6, F.z, Math.PI / 2, 'dance', 0.08);
       placeHuman(gf.h, F.x - 0.6, F.z, -Math.PI / 2, 'dance', 0.08);
@@ -1862,7 +1903,7 @@ function updateCar(dt) {
   me.steer = (me.steer || 0) + (steer - (me.steer || 0)) * Math.min(1, dt * 6); // driver handle ke saath jhuke
   const t = state.t;
   const max = (car.max || 15) * (t < state.turboUntil ? 1.8 : 1) * (t < state.sugarUntil ? 1.25 : 1);
-  if (throttle) car.speed += throttle * 22 * dt;
+  if (throttle) car.speed += throttle * (car.accel || 22) * dt; // tagdi gaadi (mafia/sports) ka pickup zyada
   else car.speed -= Math.sign(car.speed) * Math.min(Math.abs(car.speed), 14 * dt);
   car.speed = THREE.MathUtils.clamp(car.speed, -6, max);
   car.heading += steer * 2.2 * dt * THREE.MathUtils.clamp(car.speed / 5, -1, 1);
@@ -2216,6 +2257,7 @@ function tick() {
   places2.update(t);
   districts.update(t, dt, env);
   couples.update(dt, t, camera.position);
+  peopleLOD(camera.position); // 🧍 paas = asli model, door = halka rig
   if (!state.cine) couple.idle(t);
   const ev = animals.update(t, dt, ctxPlayer, state, env.night, traffic ? [ownCar, ...traffic.vehicles] : [ownCar]);
   if (ev && started && t - lastAnimalToast > 6) {
@@ -2307,6 +2349,7 @@ function tick() {
   autoSaveT -= dt;
   if (autoSaveT <= 0 && started) { autoSaveT = 15; saveGame(); }
   ui3d.update();
+  if (started) updateGps(dt);
   if (started && drawMap) {
     const ex = [];
     for (const c of npcs.cops) ex.push({ x: c.x, z: c.z, c: c.mode === 'chase' ? '#ff3b3b' : '#3b8bff' });
@@ -2340,6 +2383,265 @@ function tick() {
   bloom.threshold = 0.85 + env.day * 0.35;
   composer.render();
   requestAnimationFrame(tick);
+}
+
+// ---------- 💋 KISS + 🛏️ HOTEL ROOM (dance → 10 sec neend → subah) ----------
+const ROMANCE_TXT = {
+  hi: {
+    kiss: ['Nazrein mili… 💞', 'Dil ki dhadkan tez… 💓', '…aur ek pyaari si pappi 😘', '"Pagal ho tum!" 🙈'],
+    room: ['🏨 Room No. 302 — sirf tum dono 🌹', 'Halka sa gaana… aur ek slow dance 💃🕺', '"Aaj ki raat kitni pyaari hai na…" 🌙', 'Batti bujhi… 💤', 'Ek doosre ki baahon mein, chain ki neend 😴💞', 'Bahar chaand dheere dheere dhal raha hai… 🌙', 'Chidiyan chahchahane lagi… 🐦', '☀️ Subah ho gayi! Good morning jaanu ☕'],
+    solo: ['🏨 Akele room… AC ki thandi hawa 😌', 'Bistar pe girte hi neend 😴', 'Ghode bech ke so rahe ho… 💤', '☀️ Subah ho gayi! Ekdum fresh 💪'],
+  },
+  bho: {
+    kiss: ['Nazar milal… 💞', 'Karejwa dhak-dhak… 💓', '…aa ek pyaar bhari pappi 😘', '"Pagal baada tu!" 🙈'],
+    room: ['🏨 Room No. 302 — khali tu dunu 🌹', 'Halka gaana… aa ek slow dance 💃🕺', '"Aaj ke raat ketna sundar ba na…" 🌙', 'Batti bujhal… 💤', 'Ek dusra ke baahin mein, chain ke neend 😴💞', 'Bahar chaand dheere dheere dhalat ba… 🌙', 'Chiraiya chahchahaye lagli… 🐦', '☀️ Bhor ho gail! Good morning jaanu ☕'],
+    solo: ['🏨 Akele room… AC ke thandi hawa 😌', 'Bistar pe girat hi neend 😴', 'Ghoda bech ke sutal baada… 💤', '☀️ Bhor ho gail! Ekdam fresh 💪'],
+  },
+};
+function kissScene(gf) {
+  const x = walker.pos.x, z = walker.pos.z, h = walker.heading, y = heightAt(x, z);
+  const fx = -Math.sin(h), fz = -Math.cos(h);
+  // camera us taraf jahan deewar na ho (pehle imaarat ke andar chala jaata tha)
+  const open = (sgn) => { const cx = x + Math.cos(h) * sgn * 2, cz = z - Math.sin(h) * sgn * 2; return !solidAt(cx, cz, 0.35) && (inFoot(cx, cz) || driveable(cx, cz)); };
+  const side = open(1) ? 1 : open(-1) ? -1 : 1;
+  const rx = Math.cos(h) * side, rz = -Math.sin(h) * side;
+  return {
+    dur: 7, lines: ROMANCE_TXT[L()].kiss, kissed: false,
+    setup() {
+      nightify();
+      gf.scene = true;
+      placeHuman(me, x, z, h, 'hug', y);
+      placeHuman(gf.h, x + fx * 0.44, z + fz * 0.44, h + Math.PI, 'hug', y);
+      gf.girl.affinity += 0.15;
+    },
+    update(T) {
+      const k = Math.min(1, Math.max(0, (T - 2) / 1.6)); // dheere se paas
+      me.lookX = -0.16 * k; gf.h.lookX = 0.12 * k; // wo neeche, woh upar dekhe
+      me.look = -0.3 * k; gf.h.look = -0.3 * k;  // sir halka tircha
+      gf.h.root.position.set(x + fx * (0.44 - 0.08 * k), y, z + fz * (0.44 - 0.08 * k));
+      if (T > 3.6 && !state.scene.kissed) {
+        state.scene.kissed = true;
+        flash('love');
+        glide(1200, 1800, 0.25, 'sine', 0.05); glide(1600, 2200, 0.2, 'sine', 0.04, 0.12);
+        ui3d.bubble(gf.h.root, '😘💕', 'love', 2.5);
+        for (let i = 0; i < 6; i++) puff(x + fx * 0.22, 1.95 + Math.random() * 0.3, z + fz * 0.22, { color: 0xff4f9b, size: 0.14, life: 1.2, up: 0.8, spread: 0.6, fire: true });
+      }
+    },
+    cam(T, p, a) {
+      const side = 2.1 - Math.min(0.7, T * 0.12);
+      p.set(x + rx * side + fx * 0.22, y + 1.72, z + rz * side + fz * 0.22);
+      a.set(x + fx * 0.22, y + 1.62, z + fz * 0.22);
+    },
+    end() {
+      gf.scene = false; me.lookX = 0; me.look = 0; gf.h.lookX = 0; gf.h.look = 0;
+      gf.x = x + rx * 0.9; gf.z = z + rz * 0.9; setAction(me, 'idle');
+    },
+  };
+}
+// kamra zameen ke neeche alag bana hai (bahar ka shehar dikhe hi nahi)
+let ROOM = null;
+function buildRoom() {
+  if (ROOM) return ROOM;
+  const O = new THREE.Vector3(75, -30, 115);
+  const g = new THREE.Group(); g.position.copy(O); scene.add(g);
+  const Mt = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8, ...o });
+  const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.receiveShadow = true; g.add(m); return m; };
+  add(new THREE.BoxGeometry(9, 0.2, 9), Mt(0x6b4423, { roughness: 0.5 }), 0, -0.1, 0); // farsh
+  add(new THREE.BoxGeometry(9, 0.2, 9), Mt(0xf2e6d8), 0, 3.4, 0); // chhat
+  const wall = Mt(0x8a2a3a), wall2 = Mt(0xe8d8c8);
+  add(new THREE.BoxGeometry(9, 3.5, 0.2), wall, 0, 1.7, -4.4);
+  add(new THREE.BoxGeometry(9, 3.5, 0.2), wall2, 0, 1.7, 4.4);
+  add(new THREE.BoxGeometry(0.2, 3.5, 9), wall2, -4.4, 1.7, 0);
+  add(new THREE.BoxGeometry(0.2, 3.5, 9), wall2, 4.4, 1.7, 0);
+  add(new THREE.CircleGeometry(1.8, 28).rotateX(-Math.PI / 2), Mt(0xb0123f), 0, 0.01, 1.3); // gol kaleen
+  // palang
+  add(new THREE.BoxGeometry(2.3, 0.45, 2.6), Mt(0x4a2a18, { roughness: 0.4 }), 0, 0.22, -2.9);
+  add(new THREE.BoxGeometry(2.4, 1.5, 0.15), Mt(0x4a2a18, { roughness: 0.4 }), 0, 0.75, -4.25);
+  add(new THREE.BoxGeometry(2.15, 0.2, 2.45), Mt(0xffffff, { roughness: 0.9 }), 0, 0.52, -2.9);
+  for (const x of [-0.5, 0.5]) add(new THREE.BoxGeometry(0.75, 0.16, 0.42), Mt(0xfff0f5), x, 0.7, -3.85);
+  const petalM = new THREE.MeshBasicMaterial({ color: 0xd0001a });
+  for (let i = 0; i < 26; i++) { const pp = add(new THREE.CircleGeometry(0.05, 6).rotateX(-Math.PI / 2), petalM, (Math.random() - 0.5) * 1.8, 0.625, -2.9 + (Math.random() - 0.5) * 1.8); pp.rotation.y = Math.random() * 6; }
+  const heart = add(new THREE.CircleGeometry(0.28, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff2d55 }), 0, 0.626, -2.4);
+  heart.scale.set(1, 1, 0.8);
+  const blanket = add(new THREE.BoxGeometry(2.0, 0.14, 1.55), Mt(0xc2185b, { roughness: 0.95 }), 0, 0.82, -2.35);
+  blanket.visible = false;
+  // side lamps
+  const lampMats = [];
+  for (const x of [-1.7, 1.7]) {
+    add(new THREE.BoxGeometry(0.6, 0.6, 0.6), Mt(0x3a2414), x, 0.3, -3.9);
+    const lm = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 1.5, 0.8), toneMapped: false });
+    lampMats.push(lm);
+    add(new THREE.CylinderGeometry(0.16, 0.24, 0.32, 14), lm, x, 0.85, -3.9);
+  }
+  const lamp = new THREE.PointLight(0xffb070, 14, 9, 2); lamp.position.set(0, 2.2, -2.5); g.add(lamp);
+  // khidki (chaand → suraj)
+  const winM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.4, 0.9), toneMapped: false });
+  add(new THREE.PlaneGeometry(2, 1.5), winM, 4.28, 1.9, -1).rotation.y = -Math.PI / 2;
+  for (const dz of [-1, 1]) add(new THREE.BoxGeometry(0.1, 2.4, 0.9), Mt(0x6a1a5a), 4.22, 1.6, -1 + dz * 1.25); // parde
+  const winLight = new THREE.PointLight(0x8090ff, 6, 10, 2); winLight.position.set(3.4, 2, -1); g.add(winLight);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.4), new THREE.MeshBasicMaterial({ map: signTexture('ROOM 302', 'Hotel Raj Palace', '#ff3d7f', 512, 128), toneMapped: false }));
+  sign.position.set(0, 2.5, 4.28); sign.rotation.y = Math.PI; g.add(sign);
+  g.visible = false;
+  ROOM = { O, g, blanket, lamp, lampMats, winM, winLight };
+  return ROOM;
+}
+function roomScene(gf) {
+  const R = buildRoom(), O = R.O;
+  const T_ = ROMANCE_TXT[L()];
+  const lines = gf ? T_.room : T_.solo;
+  const D = gf ? { dance: 7, dim: 9, sleep: 19.5, dur: 24 } : { dance: 0, dim: 1.5, sleep: 10, dur: 13 };
+  // lete hue: sir -z (takiye) ki taraf, mooh upar
+  const lie = (h, x, look) => { h.root.position.set(O.x + x, O.y + 0.74, O.z - 1.95); h.root.rotation.set(Math.PI / 2, Math.PI, 0); setAction(h, 'sleep'); h.look = look; h.lookX = 0; };
+  const stand = (h) => { h.root.rotation.x = 0; };
+  let slept = false;
+  return {
+    dur: D.dur, lines,
+    setup() {
+      R.g.visible = true;
+      state.realTime = false; state.tod = 22.5 / 24; state.romance = !!gf;
+      if (gf) {
+        gf.scene = true;
+        startSceneMusic(['hindi romantic', 'romantic hindi slow', 'bollywood love song']);
+        placeHuman(me, O.x + 0.4, O.z + 1.3, Math.PI / 2, 'dance', O.y);
+        placeHuman(gf.h, O.x - 0.4, O.z + 1.3, -Math.PI / 2, 'dance', O.y);
+        gf.h.phase = me.phase;
+      } else lie(me, 0, 0.3);
+      walker.pos.set(O.x, 0, O.z);
+    },
+    update(T, dt) {
+      // 💃 kamre mein slow dance
+      if (gf && T < D.dance) {
+        const slow = T > 3;
+        setAction(me, slow ? 'hug' : 'dance'); setAction(gf.h, slow ? 'hug' : 'dance');
+        const d = slow ? 0.27 : 0.55, sway = Math.sin(T * 1.1) * 0.3, ca = Math.cos(sway), sa = Math.sin(sway);
+        me.root.position.set(O.x + d * ca, O.y, O.z + 1.3 + d * sa);
+        gf.h.root.position.set(O.x - d * ca, O.y, O.z + 1.3 - d * sa);
+        me.root.rotation.y = Math.PI / 2 - sway; gf.h.root.rotation.y = -Math.PI / 2 - sway;
+      }
+      // 🌙 batti bujhi → palang pe
+      if (T >= D.dance && !slept && (!gf || T > D.dance + 0.6)) {
+        slept = true;
+        flash('love');
+        if (gf) { lie(me, 0.36, 0.35); lie(gf.h, -0.36, -0.55); } else lie(me, 0, 0.3);
+        R.blanket.visible = true;
+      }
+      const night = T < D.sleep;
+      const dim = Math.min(1, Math.max(0, (T - D.dim) / 1.5));
+      // neend: raat dheere dheere subah mein badle (23:00 → 07:00)
+      if (T > D.dim) {
+        const k = Math.min(1, (T - D.dim) / (D.sleep - D.dim + 2.5));
+        state.tod = ((22.5 + k * 8.7) % 24) / 24;
+      }
+      const dawn = Math.min(1, Math.max(0, (T - D.sleep + 1.5) / 3));
+      R.lamp.intensity = 14 * (1 - dim * 0.85) + dawn * 4;
+      R.lampMats.forEach((m) => m.color.setRGB(2.2, 1.5, 0.8).multiplyScalar(1 - dim * 0.8));
+      R.winM.color.setRGB(0.3 + dawn * 2.4, 0.4 + dawn * 1.8, 0.9 + dawn * 0.2);
+      R.winLight.color.setRGB(0.5 + dawn * 0.5, 0.56 + dawn * 0.3, 1 - dawn * 0.4);
+      R.winLight.intensity = 6 + dawn * 22;
+      if (slept && night) { // 💤 saans
+        const br = Math.sin(T * 1.6) * 0.012;
+        me.root.position.y = O.y + 0.74 + br;
+        if (gf) gf.h.root.position.y = O.y + 0.74 - br;
+        if (Math.floor(T * 0.7) !== Math.floor((T - dt) * 0.7)) ui3d.bubble(me.root, '💤', '', 1.4);
+      }
+      if (T > D.sleep && !state.scene.chirp) { state.scene.chirp = true; for (let i = 0; i < 4; i++) glide(2600 + i * 200, 3200, 0.12, 'sine', 0.03, i * 0.25); }
+      if (T > D.sleep + 1.6 && gf && !state.scene.up) { state.scene.up = true; gf.h.look = 0.2; ui3d.bubble(gf.h.root, 'Good morning jaanu ☀️😘', 'love', 3); }
+    },
+    cam(T, p, a) {
+      if (gf && T < D.dance) { const ang = T * 0.4; p.set(O.x + Math.cos(ang) * 2.8, O.y + 1.6, O.z + 1.3 + Math.sin(ang) * 2.8); a.set(O.x, O.y + 1.2, O.z + 1.3); return; }
+      // palang ke upar se dheere ghoomta camera
+      const k = T * 0.08;
+      p.set(O.x + Math.sin(k) * 1.6, O.y + 2.9, O.z + 0.6 + Math.cos(k) * 0.4);
+      a.set(O.x, O.y + 0.7, O.z - 1.6);
+    },
+    end() {
+      R.g.visible = false; R.blanket.visible = false;
+      stand(me); me.look = 0; setAction(me, 'idle');
+      state.tod = 7.2 / 24; state.realTime = false; state.rtPref = false; // subah hi rahe (asli time pe na palte)
+      state.turboUntil = state.t + 60; state.hp = 100;
+      const ex = hotel.center.x - 4, ez = hotel.center.z + 4;
+      walker.pos.set(ex, 0, ez); walker.heading = 0; footYaw = 0;
+      if (gf) { stand(gf.h); gf.h.look = 0; gf.scene = false; gf.x = ex + 1; gf.z = ez; gf.girl.affinity += 0.3; }
+      toast(gf ? '☀️ Subah ho gayi! Dono fresh — turbo + full HP 💞' : SCENES[L()].room, 3200);
+    },
+  };
+}
+
+// ---------- 🧭 GPS NAVIGATION ----------
+let gps = null, gpsT = 0;
+const chevMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.4, 0.7, 2.6), transparent: true, opacity: 0.85, toneMapped: false, depthWrite: false });
+const chevGeo = (() => { const s = new THREE.Shape(); s.moveTo(0, 0.9); s.lineTo(0.75, -0.2); s.lineTo(0.38, -0.2); s.lineTo(0, 0.35); s.lineTo(-0.38, -0.2); s.lineTo(-0.75, -0.2); s.closePath(); return new THREE.ShapeGeometry(s).rotateX(-Math.PI / 2); })();
+const chevrons = [];
+function placeLabel(x, z) {
+  let best = null, bd = 45;
+  for (const p of PLACES()) { const d = Math.hypot(p.x - x, p.z - z); if (d < bd) { bd = d; best = p; } }
+  return best ? splitIcon(best.label)[1] : (AREAS.find(([k]) => k === placeArea(x, z))?.[2] || 'Manzil');
+}
+function setGps(x, z, label) {
+  gps = { wp: { x, z }, label: label || placeLabel(x, z), route: [], dist: 0 };
+  gpsT = 0;
+  updateGps(0, true);
+  toast(`🧭 Raasta set: ${gps.label} — sadak pe jamuni teer follow karo`, 2600);
+  beep([660, 880], 0.08, 'sine', 0.05);
+}
+function clearGps(msg) {
+  gps = null;
+  drawMap?.setNav(null);
+  for (const c of chevrons) c.visible = false;
+  $('gpsPill')?.classList.add('hidden');
+  if (msg) toast(msg, 2200);
+}
+function updateGps(dt, force = false) {
+  if (!gps) return;
+  const p = state.mode === 'drive' ? car.pos : walker.pos;
+  gpsT -= dt;
+  if (gpsT <= 0 || force) {
+    gpsT = 0.6;
+    gps.route = findRoute(p.x, p.z, gps.wp.x, gps.wp.z);
+    gps.dist = routeLength(gps.route);
+    drawMap.setNav({ wp: gps.wp, route: gps.route, dist: gps.dist, label: gps.label, drive: state.mode === 'drive' });
+    // sadak pe teer — agle ~150m
+    let left = 0, i = 1, k = 0, carry = 6;
+    const r = gps.route;
+    while (i < r.length && k < 26 && left < 160) {
+      const ax = r[i - 1].x, az = r[i - 1].z, bx = r[i].x, bz = r[i].z, L = Math.hypot(bx - ax, bz - az);
+      let s = carry;
+      while (s < L && k < 26) {
+        let c = chevrons[k];
+        if (!c) { c = new THREE.Mesh(chevGeo, chevMat); c.renderOrder = 2; scene.add(c); chevrons.push(c); }
+        const f = s / L;
+        c.position.set(ax + (bx - ax) * f, 0.07, az + (bz - az) * f);
+        c.rotation.y = headingTo(bx - ax, bz - az);
+        c.visible = state.mode === 'drive' || true;
+        c.scale.setScalar(state.mode === 'drive' ? 1.4 : 0.8);
+        k++; s += state.mode === 'drive' ? 8 : 4;
+      }
+      left += L; carry = s - L; i++;
+    }
+    for (let j = k; j < chevrons.length; j++) chevrons[j].visible = false;
+    // agla mod
+    let turn = '⬆️ Seedha', tdist = gps.dist;
+    // pehla chhota hissa (sadak ke beech tak ka jhatka) mod nahi gina jaata
+    const firstL = r.length > 1 ? Math.hypot(r[1].x - r[0].x, r[1].z - r[0].z) : 0;
+    const j0 = firstL < 15 && r.length > 2 ? 2 : 1;
+    let acc = j0 === 2 ? firstL : 0;
+    for (let j = j0; j < r.length - 1; j++) {
+      const d1x = r[j].x - r[j - 1].x, d1z = r[j].z - r[j - 1].z, d2x = r[j + 1].x - r[j].x, d2z = r[j + 1].z - r[j].z;
+      acc += Math.hypot(d1x, d1z);
+      const l1 = Math.hypot(d1x, d1z) || 1, l2 = Math.hypot(d2x, d2z) || 1;
+      const cross = (d1x * d2z - d1z * d2x) / (l1 * l2), dot = (d1x * d2x + d1z * d2z) / (l1 * l2);
+      if (acc > 4 && dot < 0.85) { turn = dot < -0.5 ? '↩️ U-turn' : cross > 0 ? '➡️ Daayein' : '⬅️ Baayein'; tdist = acc; break; }
+    }
+    const pill = $('gpsPill');
+    const fmt = (d) => (d < 1000 ? `${Math.round(d)} m` : `${(d / 1000).toFixed(1)} km`);
+    pill.querySelector('.gt').textContent = tdist < gps.dist - 1 ? `${turn} • ${fmt(tdist)} mein` : '🏁 Seedha manzil';
+    pill.querySelector('.gd').textContent = `${gps.label} • ${fmt(gps.dist)}`;
+    pill.classList.remove('hidden');
+    pill.style.top = $('mission').classList.contains('hidden') ? '' : '128px'; // mission ke saath takraaye nahi
+  }
+  const t = state.t;
+  chevMat.opacity = 0.55 + 0.35 * Math.sin(t * 5);
+  if (Math.hypot(p.x - gps.wp.x, p.z - gps.wp.z) < 12) { const l = gps.label; clearGps(`📍 Pahunch gaye — ${l}!`); coinSfx(); }
 }
 
 let passedT = 0;
@@ -2397,7 +2699,9 @@ async function boot() {
     sfx: (k) => { if (k === 'glass') noise(0.12, 0.35, 3000); else beep([880, 1320], 0.08, 'sine', 0.05); },
     load: () => { try { return JSON.parse(localStorage.getItem('mohalla.save') || 'null')?.story || 0; } catch { return 0; } }, save: () => saveGame(),
   });
-  drawMap = buildMinimap($('minimap'), { triggers: world.triggers, zones: ZONES, extraIcons: districts.icons, onPick: mapPick });
+  drawMap = buildMinimap($('minimap'), { triggers: world.triggers, zones: ZONES, extraIcons: districts.icons, onPick: (x, z) => setGps(x, z), onGo: (x, z) => { clearGps(); mapPick(x, z); }, onClear: () => clearGps('🗑️ Raasta hata diya') });
+  $('gpsPill').querySelector('.gx').onclick = () => clearGps('🗑️ GPS band');
+  $('gpsPill').onclick = (e) => { if (!e.target.closest('.gx')) drawMap.open(); };
   ui3d = createUI3D(camera);
   const shopNames = Object.fromEntries(world.triggers.filter((tr) => tr.keeper).map((tr) => [tr.def.id, tr]));
   const DESTS = [
@@ -2417,6 +2721,7 @@ async function boot() {
     bubble: (tg, text, cls) => ui3d.bubble(tg, text, cls),
     shopPoint: (id) => { const tr = shopNames[id]; return { x: tr.x, z: tr.z, name: tr.def.name[L()] }; },
     destinations: () => DESTS, dropPoints: () => drops,
+    hospital: () => DESTS.find((d) => /Hospital/.test(d.name)) || { name: '🏥 City Hospital', ...roadPoint(HOSPITAL.x, -8) },
     holdItem: (k) => { hold(me, k ? itemMesh(k) : state.weapon ? itemMesh(state.weapon) : null); setOverlay(me, k || state.weapon ? 'hold' : null); },
     isDancing: () => state.mode === 'foot' && !!keys.KeyQ,
     busy: () => !!(state.open || state.scene || state.cine || story?.active),

@@ -56,6 +56,74 @@ function makeAuto() {
   return { g, wheels: g.userData.wheels, seat: new THREE.Vector3(0, 0.72, -0.5), passenger: new THREE.Vector3(0.45, 0.42, 0.95), len: 3.4, radius: 1.0, max: 14, kind: 'auto' };
 }
 
+// ---------- 💪 TAGDI GAADIYAN — har ek ka apna mission (missions.js → forVehicle) ----------
+const bigWheel = wheelGeo.clone(); bigWheel.scale(1.2, 1.2, 1.2);
+// 🖤 Mafia ki kaali SUV — bhaari, tez, bull-bar wali
+function makeMafia() {
+  const g = new THREE.Group();
+  const body = M(0x0c0c0e, { metalness: 0.6, roughness: 0.25 });
+  const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; g.add(m); return m; };
+  add(new THREE.BoxGeometry(1.95, 0.85, 4.6), body, 0, 0.9, 0);
+  add(new THREE.BoxGeometry(1.86, 0.78, 2.9), M(0x050608, { metalness: 0.9, roughness: 0.05 }), 0, 1.7, 0.35);
+  add(new THREE.BoxGeometry(1.9, 0.1, 2.95), body, 0, 2.12, 0.35);
+  for (const sx of [-0.7, 0.7]) add(new THREE.BoxGeometry(0.08, 0.08, 2.6), chrome, sx, 2.2, 0.35); // roof rail
+  add(new THREE.BoxGeometry(1.7, 0.5, 0.12), chrome, 0, 0.75, -2.38); // bull bar
+  add(new THREE.BoxGeometry(1.95, 0.18, 0.18), chrome, 0, 0.5, 2.32);
+  for (const sx of [-0.65, 0.65]) {
+    add(new THREE.CircleGeometry(0.16, 12), HDR(2, 1.9, 1.5), sx, 1.0, -2.31).rotation.y = Math.PI;
+    add(new THREE.BoxGeometry(0.34, 0.16, 0.04), HDR(2.5, 0.1, 0.1), sx, 1.0, 2.31);
+  }
+  const wheels = [[-0.9, -1.5], [0.9, -1.5], [-0.9, 1.5], [0.9, 1.5]].map(([x, z]) => add(bigWheel, tyre, x, 0.46, z));
+  return { g, wheels, seat: new THREE.Vector3(0.42, 0.5, 0.05), passenger: new THREE.Vector3(-0.42, 0.5, 0.05), len: 4.7, radius: 1.35, max: 23, accel: 30, kind: 'mafia' };
+}
+// 🚑 Ambulance — upar laal-neeli batti (siren)
+function makeAmbulance() {
+  const g = new THREE.Group();
+  const wh = M(0xf4f4f0, { metalness: 0.2 }), red = M(0xd01818, { metalness: 0.2 });
+  const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; g.add(m); return m; };
+  add(new THREE.BoxGeometry(1.9, 0.9, 1.6), wh, 0, 0.85, -1.75); // cabin neeche
+  add(new THREE.BoxGeometry(1.8, 0.6, 1.0), glass, 0, 1.55, -1.5);
+  add(new THREE.BoxGeometry(2.0, 1.85, 3.3), wh, 0, 1.33, 0.75); // peeche ka dabba
+  add(new THREE.BoxGeometry(2.02, 0.22, 4.9), red, 0, 0.95, -0.05); // laal patti
+  for (const sx of [-1.015, 1.015]) { // ✚ dono taraf
+    add(new THREE.BoxGeometry(0.02, 0.7, 0.22), red, sx, 1.6, 0.8);
+    add(new THREE.BoxGeometry(0.02, 0.22, 0.7), red, sx, 1.6, 0.8);
+  }
+  const sirR = add(new THREE.BoxGeometry(0.5, 0.16, 0.3), HDR(3, 0.1, 0.1), -0.3, 2.34, -0.75);
+  const sirB = add(new THREE.BoxGeometry(0.5, 0.16, 0.3), HDR(0.1, 0.3, 3), 0.3, 2.34, -0.75);
+  add(new THREE.BoxGeometry(1.9, 0.16, 0.16), chrome, 0, 0.45, -2.6);
+  for (const sx of [-0.65, 0.65]) add(new THREE.CircleGeometry(0.15, 12), HDR(1.8, 1.7, 1.3), sx, 0.9, -2.56).rotation.y = Math.PI;
+  const wheels = [[-0.9, -1.6], [0.9, -1.6], [-0.9, 1.5], [0.9, 1.5]].map(([x, z]) => add(wheelGeo, tyre, x, 0.38, z));
+  return { g, wheels, seat: new THREE.Vector3(0.42, 0.45, -1.55), passenger: new THREE.Vector3(-0.42, 0.45, -1.55), len: 5.2, radius: 1.3, max: 19, kind: 'ambulance', siren: [sirR, sirB] };
+}
+// 🏎️ Sports car — neechi, laal, spoiler wali, sabse tez
+function makeSports() {
+  const g = new THREE.Group();
+  const body = M(pick([0xd4121a, 0xff7a00, 0xffd000, 0x1a6aff]), { metalness: 0.7, roughness: 0.2 });
+  const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; g.add(m); return m; };
+  add(new THREE.BoxGeometry(1.9, 0.42, 4.4), body, 0, 0.52, 0);
+  add(new THREE.BoxGeometry(1.8, 0.12, 1.4), body, 0, 0.78, -1.4).rotation.x = 0.1;
+  add(new THREE.BoxGeometry(1.5, 0.42, 1.7), glass, 0, 0.94, 0.35);
+  add(new THREE.BoxGeometry(1.8, 0.06, 0.4), M(0x111111), 0, 1.12, 2.0); // spoiler
+  for (const sx of [-0.7, 0.7]) add(new THREE.BoxGeometry(0.06, 0.32, 0.12), M(0x111111), sx, 0.92, 2.0);
+  for (const sx of [-0.6, 0.6]) {
+    add(new THREE.BoxGeometry(0.4, 0.08, 0.04), HDR(2, 1.9, 1.6), sx, 0.62, -2.21);
+    add(new THREE.BoxGeometry(0.45, 0.08, 0.04), HDR(2.5, 0.1, 0.1), sx, 0.62, 2.21);
+  }
+  const wheels = [[-0.88, -1.35], [0.88, -1.35], [-0.88, 1.35], [0.88, 1.35]].map(([x, z]) => add(wheelGeo, tyre, x, 0.36, z));
+  return { g, wheels, seat: new THREE.Vector3(0.38, 0.1, 0.4), passenger: new THREE.Vector3(-0.38, 0.1, 0.4), len: 4.4, radius: 1.25, max: 28, accel: 38, kind: 'sports' };
+}
+const MAKE = { taxi: () => makeCar(true), car: () => makeCar(false), auto: makeAuto, scooter: makeScooter, mafia: makeMafia, ambulance: makeAmbulance, sports: makeSports };
+function rollKind() {
+  const r = R();
+  return r < 0.34 ? 'car' : r < 0.49 ? 'taxi' : r < 0.76 ? 'auto' : r < 0.88 ? 'scooter' : r < 0.93 ? 'mafia' : r < 0.97 ? 'ambulance' : 'sports';
+}
+function makeDriver(kind) {
+  if (kind === 'mafia') return makeHuman({ outfit: 'tshirt', top: 0x111111, bottom: 0x222222, shades: true, stache: true, buff: 1 });
+  if (kind === 'ambulance') return makeHuman({ outfit: 'shirt', top: 0xffffff, bottom: 0x2a3a5a });
+  return makeHuman({ outfit: kind === 'taxi' || kind === 'auto' ? pick(['shirt', 'kurta']) : undefined, female: kind === 'scooter' && R() < 0.3 });
+}
+
 // Raaste: kis axis pe, kahan se kahan (India — baayein chalo)
 const ROUTES = [
   { axis: 'z', at: 0, from: -95, to: 420, w: 8 },
@@ -80,11 +148,11 @@ export function buildTraffic(scene, { isTouch }) {
   for (let i = 0; i < count; i++) {
     let k = R() * totW, route = ROUTES[0];
     for (const r of ROUTES) { if ((k -= r.w) <= 0) { route = r; break; } }
-    const roll = R();
-    const v = roll < 0.38 ? makeCar(false) : roll < 0.55 ? makeCar(true) : roll < 0.85 ? makeAuto() : makeScooter();
-    const driver = makeHuman({ outfit: v.kind === 'taxi' || v.kind === 'auto' ? pick(['shirt', 'kurta']) : undefined, female: v.kind === 'scooter' && R() < 0.3 });
+    // shuru ki 3 gaadiyan pakki tagdi — taaki shehar mein dikhein hi
+    const v = MAKE[i === 0 ? 'mafia' : i === 1 ? 'ambulance' : i === 2 ? 'sports' : rollKind()]();
+    const driver = makeDriver(v.kind);
     driver.root.position.copy(v.seat);
-    setAction(driver, v.kind === 'scooter' ? 'drive' : 'drive');
+    setAction(driver, 'drive');
     v.g.add(driver.root);
     Object.assign(v, {
       driver, ai: true, route, dir: R() < 0.5 ? 1 : -1, s: route.from + R() * (route.to - route.from), speed: 0, cruise: v.max * (0.4 + R() * 0.2),
@@ -100,9 +168,11 @@ export function buildTraffic(scene, { isTouch }) {
     ['taxi', -7.3, 62, 0], ['taxi', 7.3, -40, Math.PI], ['taxi', -7.3, -86, 0],
     ['scooter', 7.7, 31, 0.3], ['scooter', -7.7, 90, -0.2], ['scooter', 7.7, -70, 0.1],
     ['car', -7.3, 270, 0], ['auto', 7.3, 300, Math.PI], ['car', 100, -7.3, Math.PI / 2], ['scooter', -95, 7.7, -Math.PI / 2],
+    // 💪 tagdi gaadiyan — utha lo, mission milega
+    ['mafia', -7.3, 115, 0], ['sports', 7.3, 210, Math.PI], ['ambulance', 355, -7.3, Math.PI / 2],
   ];
   for (const [kind, x, z, h] of PARKED) {
-    const v = kind === 'taxi' ? makeCar(true) : kind === 'car' ? makeCar(false) : kind === 'auto' ? makeAuto() : makeScooter();
+    const v = MAKE[kind]();
     Object.assign(v, { driver: null, ai: false, parked: true, route: ROUTES[0], dir: 1, s: 0, speed: 0, cruise: 0, pos: new THREE.Vector3(x, 0, z), heading: h, uturn: null, stuck: 0, honkCd: 0 });
     v.g.position.copy(v.pos);
     v.g.rotation.y = h;
@@ -142,6 +212,9 @@ export function buildTraffic(scene, { isTouch }) {
   }
   function update(dt, t, ctx) {
     const ev = [];
+    // 🚨 siren batti — ambulance chal rahi ho (ya player chala raha ho) to laal-neeli jhilmil
+    const blink = Math.floor(t * 6) % 2;
+    for (const v of vehicles) if (v.siren) { const on = v.ai || v === ctx.playerVeh; v.siren[0].visible = on ? !!blink : true; v.siren[1].visible = on ? !blink : true; }
     for (const v of vehicles) {
       if (v === ctx.playerVeh) continue;
       if (v.ai && !v.dead && R() < dt * 0.4 && Math.hypot(v.pos.x - ctx.camera.position.x, v.pos.z - ctx.camera.position.z) > 260) relocate(v, ctx.camera.position);

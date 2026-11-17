@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { wantModel, driveModel } from './people.js';
 
 // Ek hi material, rang vertex colors mein — hazaar log bhi halke chalein
 export const HUMAN_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0.02 });
@@ -281,7 +282,7 @@ export function makeHuman(o = {}) {
     stache: o.stache ?? (!female && !kid && Math.random() < 0.55),
     buff: o.buff ?? (!female && !kid && !o.old ? 0.5 + Math.random() * 0.5 : 0),
     beard: o.beard ?? false, hat: o.hat ?? null, shades: o.shades ?? false, print: o.print ?? null, dupatta: o.dupatta, capColor: o.capColor,
-    old: !!o.old, hero: !!o.hero, inner: o.inner,
+    old: !!o.old, hero: !!o.hero, inner: o.inner, noModel: !!o.noModel, modelIdx: o.modelIdx,
   };
   if (s.bottom === undefined) s.bottom = isModernF(s.outfit) ? pick(DENIM) : female ? pick(F_TOPS) : pick(M_BOTTOMS);
   if (isModernF(s.outfit) && o.hairStyle === undefined) s.hairStyle = pick(['long', 'long', 'bun']);
@@ -321,7 +322,7 @@ export function makeHuman(o = {}) {
   if (o.scale) root.scale.multiplyScalar(o.scale);
 
   const h = {
-    spec: s, root, hips, spine, headPivot, hand, handL, meshes, ...limbs,
+    spec: s, root, hips, spine, headPivot, hand, handL, meshes, watch, ...limbs,
     aimPitch: 0, action: 'idle', at: 0, phase: Math.random() * 10, speed: 1.3, mspeed: 0, turn: 0, lean: 0, look: 0, lookX: 0, held: null, rate: 10,
     cur: { ...NEUTRAL }, tgt: { ...NEUTRAL },
   };
@@ -332,9 +333,11 @@ export function makeHuman(o = {}) {
     meshes.uaL.geometry = meshes.uaR.geometry = a; meshes.faL.geometry = meshes.faR.geometry = f;
     meshes.thL.geometry = meshes.thR.geometry = t; meshes.shL.geometry = meshes.shR.geometry = sh2;
     meshes.ftL.geometry = meshes.ftR.geometry = f2;
-    watch.visible = !!s.hero && !sleeveFull(s.outfit);
+    watch.visible = !h.model && !!s.hero && !sleeveFull(s.outfit);
     old.forEach((g) => g.dispose());
+    if (h.model) for (const m of Object.values(meshes)) m.visible = !h.model.near;
   };
+  wantModel(h); // 🧍 asli 3D model (load ho jaaye to chadh jaata hai)
   return h;
 }
 
@@ -519,6 +522,14 @@ function pose(h, t, dt) {
       T.aLx = T.aRx = 0.9 + 0.5 * Math.sin(t * 1.6); T.eL = T.eR = 0.6 + 0.4 * Math.sin(t * 1.6 + 1); T.sx = -0.15 + 0.15 * Math.sin(t * 1.6);
       T.lL = 0.3; T.kL = -0.4;
       break;
+    case 'sleep': {
+      // palang pe chit leta — saans + dheele haath
+      const br = Math.sin(t * 1.6 + ph);
+      T.aLz = -0.18; T.aRz = 0.18; T.aLx = T.aRx = 0.05 + br * 0.02; T.eL = T.eR = 0.35; T.sx = br * 0.015;
+      T.lL = T.lR = 0.02; T.kL = T.kR = -0.06; T.fL = T.fR = -0.5;
+      rate = 4;
+      break;
+    }
     case 'fall':
       T.aLz = -1.3; T.aRz = 1.3; T.lL = 0.3; T.lR = -0.2; T.kL = -0.6; T.fL = T.fR = -0.4;
       break;
@@ -631,6 +642,7 @@ export function updateHuman(h, dt, t) {
   // saans: seena halka phoole
   const br = 1 + Math.sin(t * (moving ? 3.2 : 1.7) + h.phase * 0.1) * (h.action === 'run' ? 0.02 : 0.01);
   h.meshes.torso.scale.set(1, br, 1 + (br - 1) * 1.5);
+  driveModel(h);
 }
 
 // ---------------- haath mein saaman ----------------

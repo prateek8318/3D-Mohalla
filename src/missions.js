@@ -60,6 +60,26 @@ const KIND = {
   normal: { title: '🛺 Sawari', tag: '🙋 SAWARI', tMul: 1, payMul: 1 },
   rush: { title: '🚨 EMERGENCY Sawari', tag: '🚨 EMERGENCY', tMul: 0.55, payMul: 2.2, hard: true },
   vip: { title: '🎩 Netaji VIP', tag: '🎩 NETAJI', tMul: 1.15, payMul: 2.8, maxCrash: 3 },
+  patient: { title: '🚑 Ambulance — Mareez bachao', tag: '🤕 MAREEZ', tMul: 1, payMul: 2.4, hard: true },
+};
+// gaadi ke hisaab se kaam 💪
+const VEH_TXT = {
+  hi: {
+    patientHail: ['Aaah… koi bachao… 🤕', 'Ambulance! Idhar! Saans nahi aa rahi!', 'Mera pair… 😣'],
+    patientChat: ['Jaldi bhaiya… dard ho raha hai 😣', 'Hospital kitni door hai? 🤕', 'Bas thoda aur… himmat rakho 💪'],
+    patientThanks: ['Doctor sahab ne kaha — time pe laaye, jaan bach gayi! 🙏', 'Bhagwan tumhara bhala kare! 🙏'],
+    mafiaCall: ['📞 Boss: "Meri gaadi utha li? Himmat hai teri 😏 Theek hai — kaam kar, gaadi teri!"', '📞 Boss: "Gaadi rakh le… par rival gang ka dada aaj khatam hona chahiye 🔫"'],
+    goonLine: ['Kaun hai be? Bhai ko haath lagaya to…!', 'Pakdo isko! 😡', 'Tu jaanta nahi main kaun hoon!'],
+    raceStart: ['🏁 Street race! Checkpoint se checkpoint — time pe pahuncho!', '🏎️ Shehar ke lafange race lagaa rahe hain — dikha do kaun asli driver hai!'],
+  },
+  bho: {
+    patientHail: ['Aaah… kehu bachaava… 🤕', 'Ambulance! Ehar! Saans naikhe aawat!', 'Hamar goda… 😣'],
+    patientChat: ['Jaldi bhaiya… dard hot ba 😣', 'Aspatal ketna door ba? 🤕', 'Bas thoda aur… himmat rakha 💪'],
+    patientThanks: ['Doctor sahab kahlan — time pe le aaila, jaan bach gail! 🙏', 'Bhagwan tohar bhala kare! 🙏'],
+    mafiaCall: ['📞 Boss: "Hamar gaadi utha lihla? Himmat ba tohra mein 😏 Theek ba — kaam kara, gaadi tohar!"', '📞 Boss: "Gaadi rakh la… baaki rival gang ke dada aaj khatam hoye ke chaahi 🔫"'],
+    goonLine: ['Ke ha be? Bhai ke haath lagaile ta…!', 'Pakda ehke! 😡', 'Tu jaanat naikhe ham ke hayin!'],
+    raceStart: ['🏁 Street race! Checkpoint se checkpoint — time pe pahuncha!', '🏎️ Shahar ke lafanga race lagawat baade — dekha da asli driver ke ba!'],
+  },
 };
 
 export function createMissions(ctx) {
@@ -129,8 +149,12 @@ export function createMissions(ctx) {
   }
 
   // ---------- SAWARI 🛺 ----------
+  const V = () => VEH_TXT[ctx.lang()];
+  // mareez zameen pe leta hua 🤕
+  function layDown(h, x, z) { h.root.position.set(x, 0.12, z); h.root.rotation.set(-Math.PI / 2, 0, 0); setAction(h, 'fall'); }
   function spawnPax(kind) {
     if (kind === 'vip') return makeHuman({ outfit: 'kurta', top: 0xffffff, bottom: 0xffffff, hat: 'topi', stache: true, buff: 1 });
+    if (kind === 'patient') return makeHuman({ female: R() < 0.4, old: R() < 0.4 });
     return makeHuman({ female: R() < 0.4, old: kind !== 'rush' && R() < 0.25 });
   }
   // gaadi ke aage wali footpath pe jagah dhundo
@@ -154,11 +178,12 @@ export function createMissions(ctx) {
     const pax = spawnPax(kind);
     pax.root.position.set(pt.x, 0, pt.z);
     scene.add(pax.root);
-    setAction(pax, 'wave');
-    m = { type: 'sawari', kind, K: KIND[kind], stage: 'pickup', pax, pt, offered, life: offered ? 50 : Infinity, crashes: 0, hits: 0, hailT: 0 };
+    if (kind === 'patient') layDown(pax, pt.x, pt.z); else setAction(pax, 'wave');
+    m = { type: 'sawari', kind, K: KIND[kind], stage: 'pickup', pax, pt, offered, life: offered ? (kind === 'patient' ? 70 : 50) : Infinity, crashes: 0, hits: 0, hailT: 0 };
     target(pt.x, pt.z);
     ctx.sfx('alarm');
-    if (offered) ctx.toast(`${KIND[kind].tag} haath de rahi hai! 🟡 Upar ka teer follow karo, paas jaa ke RUKO`, 3400);
+    if (kind === 'patient') ctx.toast(`🚑 Emergency call! Ek mareez sadak kinare pada hai — teer follow karo, paas jaa ke RUKO, phir 🏥 Hospital`, 3800);
+    else if (offered) ctx.toast(`${KIND[kind].tag} haath de rahi hai! 🟡 Upar ka teer follow karo, paas jaa ke RUKO`, 3400);
     else ctx.toast(`${KIND[kind].title}! 🟡 Upar ka teer follow karo → sawari ke paas jaa ke RUKO`, 3600);
     return true;
   }
@@ -168,19 +193,27 @@ export function createMissions(ctx) {
     m.pax.root.position.copy(veh.passenger);
     m.pax.root.rotation.set(0, 0, 0);
     setAction(m.pax, 'sit');
-    const all = ctx.destinations();
-    let dests = all.filter((q) => Math.hypot(q.x - m.pt.x, q.z - m.pt.z) > (m.kind === 'rush' ? 70 : 90));
-    if (!dests.length) dests = all;
-    m.dest = pick(dests);
-    m.dist = Math.hypot(m.dest.x - m.pt.x, m.dest.z - m.pt.z);
-    m.total = m.timer = m.kind === 'rush' ? m.dist / 10 + 14 : (m.dist / 7.5 + 25) * m.K.tMul;
+    if (m.kind === 'patient') {
+      m.dest = ctx.hospital();
+      m.dist = Math.hypot(m.dest.x - m.pt.x, m.dest.z - m.pt.z);
+      m.total = m.timer = m.dist / 9 + 20;
+    } else {
+      const all = ctx.destinations();
+      let dests = all.filter((q) => Math.hypot(q.x - m.pt.x, q.z - m.pt.z) > (m.kind === 'rush' ? 70 : 90));
+      if (!dests.length) dests = all;
+      m.dest = pick(dests);
+      m.dist = Math.hypot(m.dest.x - m.pt.x, m.dest.z - m.pt.z);
+      m.total = m.timer = m.kind === 'rush' ? m.dist / 10 + 14 : (m.dist / 7.5 + 25) * m.K.tMul;
+    }
     m.stage = 'drive';
     m.chat = 6;
     m.veh = veh;
     target(m.dest.x, m.dest.z);
-    ctx.bubble(veh.g, pick(m.kind === 'rush' ? ex.rushBoard : m.kind === 'vip' ? ex.vipBoard : tt.paxBoard), m.kind === 'rush' ? 'loud' : '');
+    const boardLine = m.kind === 'patient' ? pick(V().patientChat) : pick(m.kind === 'rush' ? ex.rushBoard : m.kind === 'vip' ? ex.vipBoard : tt.paxBoard);
+    ctx.bubble(veh.g, boardLine, m.kind === 'rush' || m.kind === 'patient' ? 'loud' : '');
     ctx.sfx('coin');
-    ctx.toast(`✅ Sawari baith gayi! 🏁 Manzil: ${m.dest.name} — teer follow karo${m.kind === 'vip' ? ' • TAKKAR MAT MAARNA!' : ''}`, 3400);
+    if (m.kind === 'patient') ctx.toast(`🚑 Mareez stretcher pe! 🏥 ${m.dest.name} — jaldi, time kam hai!`, 3400);
+    else ctx.toast(`✅ Sawari baith gayi! 🏁 Manzil: ${m.dest.name} — teer follow karo${m.kind === 'vip' ? ' • TAKKAR MAT MAARNA!' : ''}`, 3400);
   }
   // ---------- DELIVERY 📦 ----------
   function startDelivery(count = 1) {
@@ -212,6 +245,76 @@ export function createMissions(ctx) {
     ctx.toast('🏃 Chor! Pakdo use — ghoonsa (J) ya rickshaw se rok do!', 3000);
     return true;
   }
+  // ---------- 🖤 MAFIA HIT — rival gang ke dada ko khatam karo ----------
+  function startHit(offered = false) {
+    const p = ctx.getP();
+    const pt = aheadPoint(p, 60, 160);
+    if (!pt) return false;
+    const mk = (boss) => boss
+      ? makeHuman({ outfit: 'shirt', top: 0xf4f4f4, bottom: 0xf4f4f4, shades: true, stache: true, beard: true, buff: 1 })
+      : makeHuman({ outfit: 'tshirt', top: 0x1a1a1a, bottom: 0x2a2a3a, buff: 1, stache: true, hat: R() < 0.5 ? 'cap' : null, capColor: 0x8a0a0a, shades: R() < 0.5 });
+    const gang = [[0, 0, true], [1.6, 1.1, false], [-1.6, 1.1, false]].map(([dx, dz, boss]) => {
+      const n = npcs.adoptWalker(mk(boss), pt.x + dx, pt.z + dz, p.pos);
+      n.goon = true; n.boss = boss; n.speed = 1.6; n.canDance = false; n.smoker = false;
+      n.pause = 1e6; n.pauseAct = boss ? 'phone' : 'idle'; n.faceTo = null; n.angry = 0; n.angryPending = false;
+      n.need = boss ? 2 : 1; n.downs = 0; n.wasDown = false;
+      return n;
+    });
+    m = { type: 'hit', gang, pt, timer: 150, total: 150, offered, life: offered ? 60 : Infinity, alerted: false };
+    target(pt.x, pt.z);
+    ctx.sfx('alarm');
+    ctx.toast(`${pick(V().mafiaCall)}\n🔴 Teer follow karo — 👔 safed kapde wala DADA (2 baar giraana hai) + 2 gunde`, 4600);
+    return true;
+  }
+  function endHit() {
+    for (const n of m.gang) { n.goon = false; n.angry = 0; n.pause = 0; }
+    const g = m.gang;
+    setTimeout(() => g.forEach((n) => npcs.remove(n)), 9000);
+  }
+  // ---------- 🏎️ STREET RACE — checkpoint pe checkpoint ----------
+  function startRace(offered = false) {
+    const p = ctx.getP();
+    if (p.mode !== 'drive') { ctx.toast('Race ke liye gaadi chahiye 🏎️', 2200); return false; }
+    const all = ctx.destinations();
+    const cps = [];
+    let from = { x: p.pos.x, z: p.pos.z };
+    for (let k = 0; k < 4; k++) {
+      const c = all.filter((q) => { const d = Math.hypot(q.x - from.x, q.z - from.z); return d > 60 && d < 260 && !cps.includes(q); });
+      const q = pick(c.length ? c : all.filter((x) => !cps.includes(x)));
+      cps.push(q); from = q;
+    }
+    m = { type: 'race', cps, i: 0, timer: 0, total: 0, from: { x: p.pos.x, z: p.pos.z }, offered, life: offered ? 45 : Infinity, started: false };
+    raceLeg();
+    ctx.sfx('alarm');
+    ctx.toast(`${pick(V().raceStart)} • ${cps.length} checkpoint`, 3600);
+    return true;
+  }
+  function raceLeg() {
+    const q = m.cps[m.i];
+    const prev = m.i ? m.cps[m.i - 1] : m.from;
+    const add = Math.hypot(q.x - prev.x, q.z - prev.z) / 13 + 8;
+    m.timer = Math.max(0, m.timer) + add;
+    m.total = m.timer;
+    target(q.x, q.z);
+  }
+  // gaadi ke hisaab se kaam — chori ki gaadi / sadak pe chalate hue
+  function jobFor(kind, offered) {
+    if (kind === 'ambulance') return startSawari('patient', offered);
+    if (kind === 'mafia') return startHit(offered);
+    if (kind === 'sports') return startRace(offered);
+    if (kind === 'scooter' && R() < 0.5) { startDelivery(1); return true; }
+    const r = R(), lv = level();
+    return startSawari(lv >= 2 && r < 0.15 ? 'vip' : r < 0.35 ? 'rush' : 'normal', offered);
+  }
+  function cancel() {
+    if (!m) return;
+    if (m.type === 'sawari' && m.pax) m.pax.root.parent?.remove(m.pax.root);
+    if (m.type === 'delivery') ctx.holdItem(null);
+    if (m.type === 'chor') npcs.remove(m.thief);
+    if (m.type === 'hit') endHit();
+    done(null);
+  }
+
   // ---------- BARAAT 🎺 ----------
   let baraat = null;
   function startBaraat() {
@@ -301,9 +404,10 @@ export function createMissions(ctx) {
       if (!m && p.mode === 'drive') {
         hailT -= dt;
         if (hailT <= 0) {
-          hailT = 10 + R() * 10;
-          const r = R(), lv = level();
-          if (!startSawari(lv >= 2 && r < 0.15 ? 'vip' : r < 0.35 ? 'rush' : 'normal', true)) hailT = 3;
+          // 🚑 ambulance → mareez, 🖤 mafia → hit, 🏎️ sports → race, 🛵 scooter → delivery/sawari, baaki → sawari
+          const kind = ctx.getVeh()?.kind;
+          hailT = (kind === 'mafia' || kind === 'sports' ? 18 : 10) + R() * 10;
+          if (!jobFor(kind, true)) hailT = 3;
         }
       }
       return;
@@ -316,13 +420,20 @@ export function createMissions(ctx) {
       if (m.stage === 'pickup') {
         updateHuman(m.pax, dt, t);
         const d = Math.hypot(p.pos.x - m.pt.x, p.pos.z - m.pt.z);
-        m.pax.root.rotation.y = headingTo(p.pos.x - m.pt.x, p.pos.z - m.pt.z);
+        const patient = m.kind === 'patient';
+        if (!patient) m.pax.root.rotation.y = headingTo(p.pos.x - m.pt.x, p.pos.z - m.pt.z);
         if (m.offered) {
           m.life -= dt;
           if (m.life <= 0 || d > 180) { scene.remove(m.pax.root); done(null); return; }
         }
         m.hailT -= dt;
-        if (d < 35 && m.hailT <= 0) { m.hailT = 5; ctx.bubble(m.pax.root, pick(ex.hail)); setAction(m.pax, 'wave'); }
+        if (d < 35 && m.hailT <= 0) { m.hailT = 5; ctx.bubble(m.pax.root, pick(patient ? V().patientHail : ex.hail), patient ? 'loud' : ''); if (!patient) setAction(m.pax, 'wave'); }
+        // 🚑 mareez chal nahi sakta — paas ruko to seedha stretcher pe
+        if (patient) {
+          setHud(K.title + (m.offered ? ' (optional)' : ''), p.mode !== 'drive' ? `Gaadi mein baitho • ${Math.round(d)}m` : d < 14 ? '🛑 RUKO (S) — mareez ko stretcher pe uthao' : `🟡 Teer follow karo → 🤕 mareez pada hai • ${Math.round(d)}m`);
+          if (p.mode === 'drive' && d < 9 && Math.abs(p.speed) < 2) boardPax(veh);
+          return;
+        }
         setHud(K.title + (m.offered ? ' (optional)' : ''), p.mode !== 'drive' ? `F se gaadi mein baitho, phir sawari tak chalao • ${Math.round(d)}m` : d < 14 ? `🛑 RUK JAO (S dabao) — sawari khud aa ke baithegi` : `🟡 Teer follow karo → ${K.tag} khadi hai • ${Math.round(d)}m`);
         if (p.mode === 'drive' && d < 8 && Math.abs(p.speed) < 2) { m.stage = 'board'; m.board = 0; m.veh = veh; setAction(m.pax, 'walk'); }
       } else if (m.stage === 'board') {
@@ -347,7 +458,7 @@ export function createMissions(ctx) {
         setHud(K.title, d < 16 ? `🛑 ${m.dest.name} aa gaya — RUKO, sawari utaro!${crashTxt}` : `🏁 ${m.dest.name} pe chhodo • ${Math.round(d)}m${crashTxt}`, m.timer);
         if (m.chat <= 0) {
           m.chat = m.kind === 'rush' ? 4 + R() * 3 : 10 + R() * 8;
-          ctx.bubble(m.veh.g, pick(m.kind === 'rush' ? ex.rushChat : m.kind === 'vip' ? ex.vipChat : tt.paxChat), m.kind === 'rush' ? 'loud' : '');
+          ctx.bubble(m.veh.g, pick(m.kind === 'patient' ? V().patientChat : m.kind === 'rush' ? ex.rushChat : m.kind === 'vip' ? ex.vipChat : tt.paxChat), m.kind === 'rush' ? 'loud' : '');
         }
         const crashedOut = K.maxCrash && m.crashes >= K.maxCrash;
         const quit = p.mode !== 'drive' || ctx.getVeh() !== m.veh || (K.hard ? m.timer <= 0 : m.timer <= -10) || crashedOut;
@@ -357,7 +468,7 @@ export function createMissions(ctx) {
           const base = 30 + m.dist * 0.55 + (fast ? 35 : 0);
           const fine = m.crashes * 50 + m.hits * 40;
           const pay = Math.max(10, Math.round(base * K.payMul * streakMul() - fine));
-          dropPax(fast ? pick(tt.paxThanks) : pick(tt.paxLate));
+          dropPax(m.kind === 'patient' ? pick(V().patientThanks) : fast ? pick(tt.paxThanks) : pick(tt.paxLate));
           ctx.addMoney(pay);
           ctx.sfx('coin');
           addRespect(Math.round((fast ? 12 : 6) * (K.payMul > 1 ? 1.6 : 1)));
@@ -368,7 +479,7 @@ export function createMissions(ctx) {
         } else if (quit) {
           streak = 0;
           dropPax(pick(tt.paxFail));
-          done(crashedOut ? '😡 Netaji naraz — itni takkar! Sawari utar gayi, paisa nahi mila' : K.hard && m.timer <= 0 ? '⌛ Time khatam! Emergency sawari chali gayi 😤 (streak toot gaya)' : '😤 Sawari naraz ho ke utar gayi (streak toot gaya)');
+          done(m.kind === 'patient' ? '💔 Mareez time pe hospital nahi pahuncha… (streak toot gaya)' : crashedOut ? '😡 Netaji naraz — itni takkar! Sawari utar gayi, paisa nahi mila' : K.hard && m.timer <= 0 ? '⌛ Time khatam! Emergency sawari chali gayi 😤 (streak toot gaya)' : '😤 Sawari naraz ho ke utar gayi (streak toot gaya)');
         }
       }
     } else if (m.type === 'delivery') {
@@ -439,6 +550,67 @@ export function createMissions(ctx) {
         setHud(null);
         if (m.caught <= 0) { npcs.remove(th); done(null); }
       }
+    } else if (m.type === 'hit') {
+      const boss = m.gang[0];
+      const d = Math.hypot(p.pos.x - boss.x, p.pos.z - boss.z);
+      if (m.offered && !m.alerted) {
+        m.life -= dt;
+        if (m.life <= 0 || d > 200) { endHit(); m.gang.forEach((n) => npcs.remove(n)); done(null); return; }
+      }
+      // har giraawat gino (ghoonsa / goli / gaadi se thoka — sab chalega)
+      for (const n of m.gang) {
+        const down = n.fall > 0;
+        if (down && !n.wasDown) { n.downs++; if (n.downs === 1 && !n.boss) ctx.bubble(n.h.root, 'Aaah! 😵', 'loud'); }
+        n.wasDown = down;
+        const out = n.downs >= n.need;
+        // khatam — zameen pe hi pade rahein (mission ke baad hata diye jaate hain)
+        if (out) { n.angry = 0; if (n.fall < 50) { n.fall = 999; n.fv = null; } continue; }
+        // paas aaye to gang toot padti hai 😡
+        const dn = Math.hypot(p.pos.x - n.x, p.pos.z - n.z);
+        if (dn < 22 && !down) {
+          if (!m.alerted) { m.alerted = true; ctx.bubble(boss.h.root, pick(V().goonLine), 'loud'); ctx.sfx('alarm'); }
+          n.angry = 999; n.pause = 0;
+        }
+      }
+      const left = m.gang.filter((n) => n.downs < n.need);
+      if (m.alerted) m.timer -= dt;
+      if (left.length) target(left[0].x, left[0].z);
+      const bossLeft = boss.need - Math.min(boss.need, boss.downs);
+      setHud('🖤 Mafia ka kaam — Rival Dada', `🔴 ${m.gang.length - left.length}/${m.gang.length} khatam • Dada ${bossLeft ? `${bossLeft} baar aur giraao` : '✔'} • ${Math.round(d)}m`, m.alerted ? m.timer : undefined);
+      if (!left.length) {
+        const pay = Math.round(550 * streakMul());
+        streak++;
+        ctx.addMoney(pay); ctx.sfx('coin'); addRespect(20);
+        ctx.passed?.('🖤 Mafia Hit ✔', `₹${pay} • Boss khush 😎`);
+        endHit();
+        done(`💰 Boss: "Shabaash! Gaadi teri, aur ye le ₹${pay}" 😎`);
+      } else if (m.timer <= 0) {
+        streak = 0;
+        endHit();
+        done('⌛ Dada bach nikla… Boss naraz 😤 (streak toot gaya)');
+      }
+    } else if (m.type === 'race') {
+      const q = m.cps[m.i];
+      const d = Math.hypot(p.pos.x - q.x, p.pos.z - q.z);
+      if (!m.started) {
+        // pehla checkpoint = start line; wahan tak pahuncho to ghadi chalu
+        if (m.offered) { m.life -= dt; if (m.life <= 0) { done(null); return; } }
+      }
+      if (m.started) m.timer -= dt;
+      setHud(`🏎️ Street Race (${m.i}/${m.cps.length})`, `🏁 ${q.name} — checkpoint • ${Math.round(d)}m${m.started ? '' : ' (pahuncho to race shuru)'}`, m.started ? m.timer : undefined);
+      if (p.mode !== 'drive') { streak = 0; done('🚶 Gaadi chhod di — race khatam 😅'); return; }
+      if (d < 12) {
+        ctx.sfx('coin');
+        m.i++;
+        if (!m.started) { m.started = true; m.timer = 0; ctx.toast('🚦 GO GO GO! Race shuru 🏁', 1600); }
+        if (m.i >= m.cps.length) {
+          const pay = Math.round((260 + Math.max(0, m.timer) * 6) * streakMul());
+          streak++;
+          ctx.addMoney(pay); addRespect(15);
+          ctx.passed?.('🏎️ Street Race ✔', `₹${pay}${m.timer > 10 ? ' • ⚡ Toofani!' : ''}`);
+          done(`🏆 Race jeet li! ₹${pay} 🏎️💨`);
+        } else { raceLeg(); ctx.toast(`✅ Checkpoint ${m.i}/${m.cps.length} • ⏱ +time`, 1400); }
+      } else if (m.started && m.timer <= 0) { streak = 0; done('⌛ Race haar gaye — time khatam! 😤'); }
     }
   }
   function dropPax(line) {
@@ -475,6 +647,12 @@ export function createMissions(ctx) {
       if (m.stage === 'pickup') out.push({ key: 'm_shop', x: m.shop.x, y: 3.4, z: m.shop.z, cls: 'job', text: '📦 Parcel yahan se lo' });
       else out.push({ key: 'm_drop', x: m.drop.x, y: 2.6, z: m.drop.z, cls: 'job', text: `🏠 Parcel yahan do${m.count > 1 ? ` (${m.left} baaki)` : ''}` });
     } else if (m.type === 'chor' && !m.caught) out.push({ key: 'm_chor', x: m.thief.x, y: 2.3, z: m.thief.z, cls: 'job', text: '🏃 CHOR — pakdo!' });
+    else if (m.type === 'hit') {
+      for (const n of m.gang) if (n.downs < n.need) out.push({ key: 'm_goon' + m.gang.indexOf(n), x: n.x, y: 2.4, z: n.z, cls: 'job', text: n.boss ? `👔 DADA (${n.need - n.downs}x)` : '🔴 Gunda' });
+    } else if (m.type === 'race') {
+      const q = m.cps[m.i];
+      out.push({ key: 'm_cp', x: q.x, y: 3.4, z: q.z, cls: 'job', text: `🏁 Checkpoint ${m.i + 1}/${m.cps.length}` });
+    }
     return out;
   }
 
@@ -488,19 +666,26 @@ export function createMissions(ctx) {
       { id: 'delivery3', n: '📦×3 Bulk delivery', d: '3 ghar ek ke baad ek, har drop pe time badhta hai • bonus ₹80+' },
       { id: 'chor', n: '🏃 Chor pakdo', d: 'Bhaagte chor ko maar ke roko • ₹150' },
       { id: 'baraat', n: '🎺 Baraat bulao', d: 'Dhol-ghodi; paas ja ke Q se naacho' },
+      { id: 'patient', n: '🚑 Ambulance — mareez bachao', d: 'Sadak pe pade mareez ko 🏥 Hospital, time pe • ₹ x2.4 (ambulance chura lo to khud milega)' },
+      { id: 'hit', n: '🖤 Mafia hit', d: 'Rival gang ke Dada + 2 gunde giraao • ₹550 (mafia ki kaali SUV churao to khud milega)' },
+      { id: 'race', n: '🏎️ Street race', d: '4 checkpoint, time ke andar • ₹260+ (sports car churao to khud milega)' },
     ],
     start(id) {
-      if (m) {
-        if (m.type === 'sawari' && m.pax) m.pax.root.parent?.remove(m.pax.root);
-        if (m.type === 'delivery') ctx.holdItem(null);
-        if (m.type === 'chor') npcs.remove(m.thief);
-        done(null);
-      }
-      if (id === 'sawari' || id === 'rush' || id === 'vip') startSawari(id === 'sawari' ? 'normal' : id);
+      cancel();
+      if (id === 'sawari' || id === 'rush' || id === 'vip' || id === 'patient') startSawari(id === 'sawari' ? 'normal' : id);
+      else if (id === 'hit') { if (!startHit()) ctx.toast('Abhi Dada ka pata nahi chala… thodi der baad 😅', 2200); }
+      else if (id === 'race') startRace();
       else if (id === 'delivery') startDelivery(1);
       else if (id === 'delivery3') startDelivery(3);
       else if (id === 'chor') { if (!startChor()) ctx.toast('Abhi koi chor nahi dikha… thodi der baad 😅', 2200); }
       else if (id === 'baraat') { if (baraat || !startBaraat()) ctx.toast('Baraat abhi aa nahi sakti 😅', 2000); }
+    },
+    // 😈 gaadi chura li → us gaadi ka kaam turant (koi kaam chal raha ho to bas hint)
+    forVehicle(v) {
+      const kind = v?.kind;
+      if (!['ambulance', 'mafia', 'sports'].includes(kind)) return;
+      if (m) { ctx.toast(kind === 'ambulance' ? '🚑 Ambulance mili! Abhi wala kaam khatam karo — phir mareez ki call aayegi' : kind === 'mafia' ? '🖤 Mafia ki gaadi! Abhi wala kaam khatam karo — phir Boss ka call aayega' : '🏎️ Tagdi gaadi! Abhi wala kaam khatam karo — phir race milegi', 3000); return; }
+      setTimeout(() => { if (!m && ctx.getVeh() === v && ctx.getP().mode === 'drive') { jobFor(kind, false); hailT = 25; } }, 1800);
     },
     get active() { return m; },
     marker() { return m && beacon.visible ? { x: beacon.position.x, z: beacon.position.z } : null; },

@@ -196,7 +196,7 @@ export function peopleLOD(cam, near = 32) {
   const n2 = near * near;
   for (const h of live) {
     h.root.getWorldPosition(_w);
-    const isNear = _w.distanceToSquared(cam) < n2;
+    const isNear = !h.noModel && _w.distanceToSquared(cam) < n2; // noModel = apna rig hi dikhe (khaas kapde)
     if (isNear === h.model.near) continue;
     h.model.near = isNear;
     h.model.flip.visible = isNear;

@@ -211,7 +211,7 @@ export function buildHotel(scene, { triggers, keepers }) {
     for (let i = 0; i < NX; i++) for (let j = 0; j < NZ; j++) {
       const k = i * NZ + j;
       const wave = Math.sin(t * 4 + i * 0.8 + j * 1.3 + lv.bass * 6);
-      col.setHSL((t * 0.15 + (i + j) * 0.07) % 1, 1, 0.5).multiplyScalar((0.6 + 0.8 * Math.max(0, wave) + lv.bass * 1.5) * bright);
+      col.setHSL((t * 0.15 + (i + j) * 0.07) % 1, 1, 0.5).multiplyScalar((0.6 + 0.6 * Math.max(0, wave) + lv.bass * 0.5) * bright);
       tiles.setColorAt(k, col);
     }
     tiles.instanceColor.needsUpdate = true;
@@ -222,7 +222,7 @@ export function buildHotel(scene, { triggers, keepers }) {
       b.material.opacity = (on ? 0.12 : 0.06) + lv.mid * 0.12;
     });
     speakers.forEach((s) => s.scale.setScalar(1 + lv.bass * 0.4));
-    discoLight.intensity = (on ? 60 : 15) * night + lv.bass * 40;
+    discoLight.intensity = (on ? 45 : 15) * night + lv.bass * 14;
     discoLight.color.setHSL((t * 0.2) % 1, 1, 0.55);
     for (const tb of tables) tb.flame.scale.setScalar(1 + Math.sin(t * 20 + tb.x) * 0.15);
     for (let i = 0; i < NOTES; i++) {

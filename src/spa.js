@@ -105,7 +105,9 @@ export function buildSpa(scene, { triggers, keepers }) {
   const k = { id: 'spa', def: SPA_DEF, x: X0 + 2.6, z: Z1 - 0.6, heading: Math.PI, stall: true };
   keepers.push(k);
   triggers.push({ def: SPA_DEF, x: X0 + 2.6, z: Z1 - 2.4, heading: Math.PI, r: 2.4, foot: true, keeper: k, front: { x: X0 - 3, z: SPA.z } });
-  const masseuse = makeHuman({ female: true, outfit: 'salwar', top: 0xffffff, bottom: 0x2e9a6a, dupatta: 0x2e9a6a });
+  // spa ki therapist (18+ baalig): crop top + shorts — kamar khuli
+  const masseuse = makeHuman({ female: true, outfit: 'crop', top: 0xff4f9b, bottom: 0x1c1c2a, shorts: true, bust: 1.22, hairStyle: 'long' });
+  masseuse.noModel = true; // apna rig — tabhi ye kapde dikhenge
   masseuse.root.position.set(X1 - 3.2, 0, SPA.z - 1.4); masseuse.root.rotation.y = -Math.PI / 2;
   setAction(masseuse, 'idle');
   inG.add(masseuse.root);

@@ -957,7 +957,7 @@ export function buildWorld(scene, { isTouch, renderer }) {
     scene.fog.density = env.fogDensity;
     skyMat.uniforms.top.value.copy(env.skyTop);
     skyMat.uniforms.bottom.value.copy(env.skyBottom).lerp(SKYB_R, romanceMix * (0.3 + 0.7 * night));
-    skyMat.uniforms.pulse.value = lv.bass * 0.8 * night;
+    skyMat.uniforms.pulse.value = lv.bass * 0.3 * night;
     starMat.opacity = (0.6 + lv.treble * 0.4) * Math.max(0, night * 1.3 - 0.3);
     moon.visible = halo.visible = night > 0.2;
     halo.material.opacity = 0.55 * night;
@@ -1001,7 +1001,7 @@ export function buildWorld(scene, { isTouch, renderer }) {
 
     for (const b of buildingMats) {
       const d = Math.hypot(b.x - ppos.x, b.z - ppos.z);
-      let k = 0.55 + lv.bass * 1.5 * (0.5 + 0.5 * Math.sin(t * 5 - d * 0.12));
+      let k = 0.55 + lv.bass * 0.5 * (0.5 + 0.5 * Math.sin(t * 5 - d * 0.12));
       if (fx.sugar) k += 0.9 * Math.max(0, Math.sin(t * 10 + d * 0.3));
       b.mat.emissiveIntensity = k * (0.08 + 0.92 * night);
     }
@@ -1015,7 +1015,7 @@ export function buildWorld(scene, { isTouch, renderer }) {
       else if (romanceMix > 0.5) h = 0.92 + 0.06 * Math.sin(i * 0.4 + t * 2);
       else h = (0.08 + 0.05 * Math.sin(i * 0.9) + (i % 3) * 0.28 + t * 0.03) % 1;
       const wave = 0.5 + 0.5 * Math.sin(t * 6 - i * 0.35);
-      color.setHSL(h, 1, l).multiplyScalar((1.2 + lv.bass * 2.2 * wave + (lv.beat ? 0.8 : 0)) * (0.4 + 0.6 * night));
+      color.setHSL(h, 1, l).multiplyScalar((1.0 + lv.bass * 0.7 * wave + (lv.beat ? 0.2 : 0)) * (0.4 + 0.6 * night));
       bulbs.setColorAt(i, color);
     }
     bulbs.instanceColor.needsUpdate = true;
@@ -1040,7 +1040,7 @@ export function buildWorld(scene, { isTouch, renderer }) {
     ring2.rotation.z = t * 0.6;
     fmSign.rotation.y = t * 0.4;
     chowkLight.color.setHSL((t * 0.08) % 1, 1, 0.55);
-    chowkLight.intensity = 40 + lv.bass * 160;
+    chowkLight.intensity = 40 + lv.bass * 45;
     ghatLight.intensity = 30 + romanceMix * 80;
 
     // water waves (only near → cheap enough)

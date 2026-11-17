@@ -221,7 +221,20 @@ async function searchYT(q) {
     const j = await r.json();
     if (!j.error) return (j.items || []).map((it) => ({ yt: it.id.videoId, title: dec(it.snippet.title), artist: dec(it.snippet.channelTitle), img: it.snippet.thumbnails?.default?.url || '' }));
   }
+  // apna server (/api/music, official YouTube API) → na chale to public mirrors
+  try { const items = await searchApi('yt', q); if (items.length) return items; } catch { /* aage */ }
   return searchYTKeyless(q);
+}
+// 🎧 /api/music — YouTube/Spotify ka official search (keys server pe). 'nokey' = key hi nahi lagi
+async function searchApi(src, q) {
+  const r = await timed(`/api/music?src=${src}&q=${encodeURIComponent(q)}`, 9000);
+  const json = (r.headers.get('content-type') || '').includes('json');
+  if (!r.ok || !json) {
+    let err = '';
+    if (json) { try { err = (await r.json()).error || ''; } catch { /* ok */ } }
+    throw new Error(err === 'nokey' || !json ? 'nokey' : 'down');
+  }
+  return (await r.json()).items || [];
 }
 const fmt = (s) => (s ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '');
 
@@ -280,8 +293,7 @@ export function initMusicUI(music, { toast }) {
     $('sq').value = q;
     setTab('search');
     const yb = document.querySelector('.srcs [data-src="yt"]');
-    yb.click();
-    doSearch(q);
+    yb.click(); // ye khud doSearch chala deta hai
   };
   $('ytSearch').onkeydown = (e) => e.key === 'Enter' && $('ytFind').click();
 
@@ -294,6 +306,14 @@ export function initMusicUI(music, { toast }) {
     toast('Spotify ready — player mein ▶ dabao');
   };
   $('spUrl').onkeydown = (e) => e.key === 'Enter' && $('spPlay').click();
+  $('spFind').onclick = () => {
+    const q = $('spSearch').value.trim();
+    if (!q) return;
+    $('sq').value = q;
+    setTab('search');
+    document.querySelector('.srcs [data-src="sp"]').click(); // ye khud doSearch chala deta hai
+  };
+  $('spSearch').onkeydown = (e) => e.key === 'Enter' && $('spFind').click();
 
   const queueEl = $('queue');
   const renderQueue = () => {
@@ -328,7 +348,8 @@ export function initMusicUI(music, { toast }) {
     document.querySelectorAll('.srcs button').forEach((x) => x.classList.toggle('on', x === b));
     snote.textContent = src === 'yt'
       ? '▶ YouTube gaane isi app mein chalenge (ads YouTube ke hisaab se). Nahi chala to 🎧 Free apne aap aa jaayega.'
-      : '🎧 Free: poore gaane, bina ads ke, aur city asli beat pe naachti hai.';
+      : src === 'sp' ? '🟢 Spotify: gaana chuno, phir player mein ▶ dabao. Premium login = poora gaana, warna 30 sec preview.'
+        : '🎧 Free: poore gaane, bina ads ke, aur city asli beat pe naachti hai.';
     if ($('sq').value.trim()) doSearch($('sq').value.trim());
   }));
   async function doSearch(q) {
@@ -336,7 +357,10 @@ export function initMusicUI(music, { toast }) {
     try {
       if (src === 'yt') {
         try { results = await searchYT(q); lastSrc = 'yt'; }
-        catch { results = await searchAudius(q); lastSrc = 'audius'; snote.textContent = '⚠️ YouTube abhi nahi mila — ye 🎧 Free (ad-free) gaane dikha rahe hain.'; }
+        catch { results = await searchAudius(q); lastSrc = 'audius'; snote.textContent = '⚠️ YouTube search abhi nahi chala (server pe YT_API_KEY lagao) — ye 🎧 Free (ad-free) gaane dikha rahe hain.'; }
+      } else if (src === 'sp') {
+        try { results = await searchApi('sp', q); lastSrc = 'sp'; }
+        catch (e) { results = await searchAudius(q); lastSrc = 'audius'; snote.textContent = e.message === 'nokey' ? '⚠️ Spotify search ke liye server pe SPOTIFY_CLIENT_ID + SPOTIFY_CLIENT_SECRET lagao — abhi 🎧 Free gaane dikha rahe hain.' : '⚠️ Spotify abhi nahi mila — ye 🎧 Free (ad-free) gaane dikha rahe hain.'; }
       } else { results = await searchAudius(q); lastSrc = 'audius'; }
       sres.innerHTML = '';
       if (!results.length) { sres.innerHTML = '<div class="note">Kuch nahi mila 😕 doosra naam try karo</div>'; return; }
@@ -363,6 +387,12 @@ export function initMusicUI(music, { toast }) {
     if (r.yt) {
       showDock(`https://www.youtube-nocookie.com/embed/${r.yt}?autoplay=1&playsinline=1&rel=0`, '🎶 ' + r.title, Math.round(Math.min(360, innerWidth - 24) * 9 / 16), true);
       dock.classList.remove('file');
+    } else if (r.sp) {
+      showDock(`https://open.spotify.com/embed/track/${r.sp}?utm_source=generator&theme=0`, '🎧 ' + r.title, 152);
+      dock.classList.remove('file');
+      toast('🟢 Spotify ready — player mein ▶ dabao', 2200);
+      panel.classList.add('hidden');
+      return;
     } else {
       music.playList(results.map((x) => ({ name: `${x.title} — ${x.artist}`, url: x.url })), i);
     }

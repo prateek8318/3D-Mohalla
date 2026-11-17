@@ -1697,29 +1697,54 @@ function spaScene(it) {
   const onTable = k === 'spa_shoulder' || k === 'spa_full';
   const steam = k === 'spa_steam';
   const back = { x: walker.pos.x, z: walker.pos.z, h: walker.heading };
+  const fx0 = onTable ? T.x : steam ? S.x : C.x, fz0 = onTable ? T.z : steam ? S.z : C.z;
+  // pehle khade ho ke shirt utaarta hai (0.7s haath upar → 1.7s shirt gayi → 2.6s jagah pe)
+  const st = onTable ? { x: T.x + 1.2, z: T.z + 0.95 } : steam ? { x: S.x - 0.9, z: S.z + 0.5 } : { x: C.x - 0.2, z: C.z + 1.0 };
+  const was = { outfit: me.spec.outfit, top: me.spec.top, bottom: me.spec.bottom };
+  let phase = 0, cloth = null;
+  const settle = () => {
+    if (onTable) { // ulta leta — sar pashchim ki taraf
+      me.root.position.set(T.x + 0.95, T.y + 0.12, T.z);
+      me.root.rotation.set(-Math.PI / 2, Math.PI / 2, 0);
+      setAction(me, 'sleep');
+      spa.work(true, T.x - 0.2, T.z + 0.8, 0);
+    } else if (steam) {
+      placeHuman(me, S.x + 0.2, S.z - 0.6, Math.PI, 'sit', -0.08);
+      spa.work(false);
+    } else { // kursi: champi / facial / pair
+      placeHuman(me, C.x, C.z, Math.PI / 2, 'sit', -0.02);
+      if (k === 'spa_feet') spa.work(true, C.x - 1.0, C.z, -Math.PI / 2);
+      else spa.work(true, C.x + 0.75, C.z, Math.PI / 2);
+    }
+  };
   return {
-    dur: 12, lines: ['', '', ''],
+    dur: 14, lines: ['', '', ''],
     setup() {
       // didi ki baat — Claude us seva ke hisaab se (na mile to likhi hui)
       const say = (i) => aiLine(`spa:${k}:${L()}`, { who: 'Sunita didi', role: 'Mohalla Spa ki maalish/champi karne wali didi, baatooni aur pyaari', situation: `${it.n} kar rahi hai customer ki; kaam karte hue aam baat-cheet (${i === 0 ? 'shuruaat' : i === 1 ? 'beech mein' : 'khatam hone pe'})`, lang: L(), spicy: false }, () => SPA_TALK[k][i]);
       state.scene.lines = [say(0), say(1), say(2)];
       state.scene.speakers = ['heroine', 'heroine', 'heroine'];
-      if (onTable) { // ulta leta — sar pashchim ki taraf
-        me.root.position.set(T.x + 0.95, T.y + 0.12, T.z);
-        me.root.rotation.set(-Math.PI / 2, Math.PI / 2, 0);
-        setAction(me, 'sleep');
-        spa.work(true, T.x - 0.2, T.z + 0.8, 0);
-      } else if (steam) {
-        placeHuman(me, S.x + 0.2, S.z - 0.6, Math.PI, 'sit', -0.08);
-        spa.work(false);
-      } else { // kursi: champi / facial / pair
-        placeHuman(me, C.x, C.z, Math.PI / 2, 'sit', -0.02);
-        if (k === 'spa_feet') spa.work(true, C.x - 1.0, C.z, -Math.PI / 2);
-        else spa.work(true, C.x + 0.75, C.z, Math.PI / 2);
-      }
+      me.noModel = true; // apna rig — taaki shirt utarti dikhe
+      spa.work(false);
+      placeHuman(me, st.x, st.z, headingTo(fx0 + 1.4 - st.x, fz0 + 1.75 - st.z), 'idle'); // camera ki taraf
       hold(me, null);
     },
     update(T_) {
+      if (phase === 0 && T_ > 0.7) { phase = 1; setAction(me, 'clothes'); } // dono haath upar — shirt kheench raha
+      if (phase === 1 && T_ > 1.7) { // shirt utar gayi → kamar pe safed taulia
+        phase = 2;
+        cloth = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.05, 0.3), new THREE.MeshStandardMaterial({ color: was.top, roughness: 0.9 }));
+        scene.add(cloth);
+        Object.assign(me.spec, { bare: true, outfit: 'lungi', bottom: 0xfafafa });
+        me.rebuild();
+        setAction(me, 'idle');
+      }
+      if (cloth) { // shirt hawa mein uchhal ke farsh pe
+        const u = Math.min(1, (T_ - 1.7) / 0.8);
+        cloth.position.set(st.x + u * 0.7, 1.75 - u * 1.7 + Math.sin(u * Math.PI) * 0.45, st.z + u * 0.5);
+        cloth.rotation.set(u * 2.2, u * 3, 0);
+      }
+      if (phase === 2 && T_ > 2.6) { phase = 3; settle(); }
       if (steam && Math.floor(T_ * 3) !== Math.floor((T_ - 0.05) * 3)) puff(S.x + (Math.random() - 0.5) * 2, 0.6, S.z, { color: 0xffffff, size: 0.5, life: 2, up: 0.5, spread: 1 });
       if (k === 'spa_facial' || k === 'spa_champi') me.lookX = 0.25; // sar peeche tika
     },
@@ -1731,6 +1756,8 @@ function spaScene(it) {
     },
     end() {
       spa.work(false);
+      if (cloth) { scene.remove(cloth); cloth.geometry.dispose(); cloth.material.dispose(); }
+      Object.assign(me.spec, was, { bare: false }); me.noModel = false; me.rebuild(); // kapde wapas
       me.root.rotation.set(0, back.h, 0); me.lookX = 0; setAction(me, 'idle');
       walker.pos.set(back.x, 0, back.z); me.root.position.copy(walker.pos);
       const t = state.t;
@@ -2927,7 +2954,7 @@ function tick() {
     camera.lookAt(0, 4, 0);
   }
   // din mein bloom kam + sirf asli chamakti cheezein glow karein (pehle safed deewarein bhi chamakti thi)
-  bloom.strength = (0.6 + lv.bass * 0.5) * (0.22 + 0.78 * env.night) + (state.romance ? 0.2 : 0);
+  bloom.strength = (0.55 + lv.bass * 0.14) * (0.22 + 0.78 * env.night) + (state.romance ? 0.2 : 0);
   bloom.threshold = 0.85 + env.day * 0.35;
   composer.render();
   requestAnimationFrame(tick);

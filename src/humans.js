@@ -184,12 +184,14 @@ function headGeo(s) {
 }
 
 function torsoGeo(s) {
-  const parts = [], o = s.outfit, top = s.top;
-  const bw = s.buff || 0, fem = s.female && !s.kid;
+  // bare = bina shirt (spa/maalish): poora dhad skin ka
+  const parts = [], o = s.bare ? 'bare' : s.outfit, top = s.bare ? s.skin : s.top;
+  const bw = s.buff || 0, fem = s.female && !s.kid, bust = s.bust || 1;
   const topD = darker(top, 0.88);
   // kamar (patli) → seena (chauda) → kandhe: putle jaisa ek capsule nahi
   const crop = o === 'crop' || o === 'lehenga'; // lehenga ki choli bhi chhoti
   parts.push(P(cyl(fem ? 0.135 : 0.15, fem ? 0.145 : 0.155, 0.27, 12), crop ? s.skin : top, [0, 0.13, 0], [0, 0, 0], [1.08 + bw * 0.06, 1, 0.74]));
+  if (o === 'bare') parts.push(P(sph(0.008, 5, 4), darker(s.skin, 0.7), [0, 0.1, -0.114])); // naabhi
   if (crop) {
     parts.push(P(sph(0.008, 5, 4), darker(s.skin, 0.7), [0, 0.1, -0.106])); // naabhi
     parts.push(P(cyl(0.155, 0.15, 0.06, 12), darker(top, 0.85), [0, 0.27, 0], [0, 0, 0], [1.08, 1, 0.76])); // crop top ka kinara
@@ -198,7 +200,7 @@ function torsoGeo(s) {
   parts.push(P(cap(0.06 + bw * 0.008, 0.28 + bw * 0.03, 8), top, [0, 0.45, 0.01], [0, 0, Math.PI / 2], [1, 0.9, 0.85]));
   // trapezius — gardan se kandhe tak dhalaan
   for (const x of [-1, 1]) parts.push(P(sph(0.07 + bw * 0.01, 8, 6), top, [x * 0.085, 0.5, 0.02], [0, 0, x * 0.5], [1.4, 0.7, 0.9]));
-  if (fem) parts.push(P(sph(0.075, 10, 8), top, [0, 0.36, -0.07], [0, 0, 0], [2.1, 0.85, 0.75]));
+  if (fem) parts.push(P(sph(0.075, 10, 8), top, [0, 0.36, -0.07], [0, 0, 0], [2.1, 0.85 * bust, 0.75 * bust]));
   else if (bw > 0.4 && o !== 'kurta' && o !== 'police') for (const x of [-1, 1]) parts.push(P(sph(0.085, 8, 6), top, [x * 0.075, 0.385, -0.075], [0, 0, 0], [1.1, 0.75, 0.55])); // seena 💪
   parts.push(P(cyl(0.052, 0.06, 0.12, 8), s.skin, [0, 0.555, 0]));
   // kapdon ki detail
@@ -313,7 +315,7 @@ const sleeveFull = (o) => ['kurta', 'police', 'salwar', 'jacket'].includes(o);
 function upperArmGeo(s) {
   const b = s.buff || 0, parts = [];
   const r = (s.female ? 0.044 : 0.05) + b * 0.014;
-  if (s.outfit === 'crop') { // bina baanh — poora haath khula
+  if (s.outfit === 'crop' || s.bare) { // bina baanh — poora haath khula
     parts.push(P(sph(r + 0.004, 10, 8), s.skin, [0, -0.04, 0], [0, 0, 0], [1, 1.1, 1]));
     parts.push(P(cap(r, 0.22, 8), s.skin, [0, -0.16, 0]));
     return merge(parts);
@@ -328,7 +330,7 @@ function upperArmGeo(s) {
   return merge(parts);
 }
 function foreArmGeo(s) {
-  const full = sleeveFull(s.outfit), c = full ? s.top : s.skin;
+  const full = !s.bare && sleeveFull(s.outfit), c = full ? s.top : s.skin;
   const b = s.buff || 0, r = (s.female ? 0.038 : 0.044) + b * 0.009;
   const parts = [
     P(cyl(r * 1.05, r * 0.78, 0.24, 8), c, [0, -0.12, 0]),
@@ -347,6 +349,12 @@ function foreArmGeo(s) {
 }
 function thighGeo(s) {
   const b = s.buff || 0;
+  if (s.shorts) return merge([ // chhote shorts — baaki taang khuli
+    P(sph(0.085 + b * 0.01, 10, 8), s.bottom, [0, -0.02, 0]),
+    P(cyl(0.09 + b * 0.01, 0.086, 0.13, 10), s.bottom, [0, -0.075, 0]),
+    P(cyl(0.083 + b * 0.01, 0.062, 0.42, 10), s.skin, [0, -0.22, 0]),
+    P(sph(0.064, 8, 6), s.skin, [0, -0.43, 0]),
+  ]);
   return merge([
     P(sph(0.085 + b * 0.01, 10, 8), s.bottom, [0, -0.02, 0]),
     P(cyl(0.083 + b * 0.01, 0.062, 0.42, 10), s.bottom, [0, -0.22, 0]),
@@ -354,7 +362,7 @@ function thighGeo(s) {
   ]);
 }
 function shinGeo(s) {
-  const lower = s.outfit === 'lungi' || s.outfit === 'frock' || s.dhoti || (s.kid && s.outfit === 'shirt') ? s.skin : s.bottom;
+  const lower = s.shorts || s.outfit === 'lungi' || s.outfit === 'frock' || s.dhoti || (s.kid && s.outfit === 'shirt') ? s.skin : s.bottom;
   return merge([
     P(cyl(0.06, 0.045, 0.4, 10), lower, [0, -0.2, 0]),
     P(sph(0.055, 8, 6), lower, [0, -0.13, 0.018], [0, 0, 0], [1, 1.6, 1]), // pindli
@@ -412,7 +420,7 @@ export function makeHuman(o = {}) {
     role: o.role ?? null, tie: o.tie, pagdiColor: o.pagdiColor, kalgi: !!o.kalgi, shikha: !!o.shikha, tilak: o.tilak ?? null, specs: !!o.specs,
     nath: !!o.nath, tikka: !!o.tikka, hoops: !!o.hoops, gajra: !!o.gajra, ghoonghat: !!o.ghoonghat, pallu: o.pallu,
     belly: o.belly ?? 0, vest: o.vest ?? null, mala: !!o.mala, garland: !!o.garland, angvastra: o.angvastra ?? null, gamchha: !!o.gamchha, apron: o.apron ?? null,
-    dhoti: !!o.dhoti, bangles: o.bangles ?? (female && !kid && ['saree', 'salwar', 'lehenga'].includes(o.outfit) && Math.random() < 0.7),
+    dhoti: !!o.dhoti, shorts: !!o.shorts, bust: o.bust || 1, bare: !!o.bare, bangles: o.bangles ?? (female && !kid && ['saree', 'salwar', 'lehenga'].includes(o.outfit) && Math.random() < 0.7),
   };
   if (s.bottom === undefined) s.bottom = isModernF(s.outfit) ? pick(DENIM) : female ? pick(F_TOPS) : pick(M_BOTTOMS);
   if (isModernF(s.outfit) && o.hairStyle === undefined) s.hairStyle = pick(['long', 'long', 'bun']);

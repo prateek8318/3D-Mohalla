@@ -253,12 +253,8 @@ export function buildPlaces(scene, { CIRCLES, triggers }) {
   }
   tree(-66, 15); tree(-66, -15); tree(66, 15, 0.9); tree(66, -15, 1.1); tree(-40, 433, 0.9); tree(40, 433);
 
-  taxi(-7.3, 62, 0);
-  taxi(7.3, -40, Math.PI);
-  taxi(-7.3, -86, 0);
-  scooter(7.7, 31, 0.3, 0x7fc8d8);
-  scooter(-7.7, 90, -0.2, 0xe86a5a);
-  scooter(7.7, -70, 0.1, 0x9fd88a);
+  // khadi taxi/scooter ab asli gaadiyan hain (traffic.js → PARKED) — inme baith ke chala sakte ho
+  void taxi; void scooter;
 
   return {
     update(t, dt, env) { for (const u of updaters) u(t, dt, env); },

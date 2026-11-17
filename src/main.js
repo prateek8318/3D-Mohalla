@@ -41,7 +41,7 @@ const state = {
   lang: 'hi', level: 0, age18: false, money: 300, t: 0, open: null, romance: false,
   sugarUntil: 0, turboUntil: 0, fireUntil: 0, champiUntil: 0,
   tod: 16 / 24, realTime: true, rtPref: true, retro: false, cineFx: true, weapon: null, runToggle: false, hurtUntil: 0, attackCd: 0, dogFriend: null, dogFriendUntil: 0, catUntil: 0, cine: null,
-  hp: 100, onRoof: false,
+  hp: 100, onRoof: false, lives: 3, lifeRegen: 0, pose: null,
   mode: 'drive', wanted: 0, wantedQuiet: 0, escapeUntil: 0, caughtCd: 0,
   bag: [], seq: null, ittarUntil: 0, haircutAt: -999, facialAt: -999, polishAt: -999, styleAt: -999,
   activeShop: null, talkGirl: null, stunUntil: 0, balloonUntil: 0,
@@ -308,7 +308,7 @@ function closeSheets() {
   ['shop', 'music', 'places'].forEach((id) => $(id).classList.add('hidden'));
   if (state.talkGirl) { state.talkGirl.talking = false; state.talkGirl.pause = 1.5; state.talkGirl = null; }
   state.activeShop = null;
-  if (state.open !== 'cine') state.open = null;
+  if (state.open !== 'cine' && state.open !== 'dead') state.open = null;
 }
 function openMusic(opts) {
   closeSheets();
@@ -476,11 +476,18 @@ function exitRick(force = false) {
   setAction(me, 'idle');
   if (state.weapon) { hold(me, itemMesh(state.weapon)); setOverlay(me, 'hold'); }
 }
-function nearestVehicle(pos, r = 3.6) {
+// gaadi ke dabbe ke kinare se doori — lambi gaadi ke aage/peeche khade ho ke bhi baith sakte ho
+function edgeDist(v, x, z) {
+  const dx = x - v.pos.x, dz = z - v.pos.z, h = v.heading || 0, c = Math.cos(h), s = Math.sin(h);
+  const lx = Math.abs(dx * c - dz * s) - (v.radius || 1) * 1.05, lz = Math.abs(dx * s + dz * c) - (v.len || 3.4) / 2;
+  return Math.hypot(Math.max(0, lx), Math.max(0, lz));
+}
+function nearestVehicle(pos, r = 1.8) {
   if (state.onRoof) return null;
   let best = null, bd = r;
   for (const v of [ownCar, ...traffic.vehicles]) {
-    const d = Math.hypot(v.pos.x - pos.x, v.pos.z - pos.z);
+    if (v.dead) continue;
+    const d = edgeDist(v, pos.x, pos.z);
     if (d < bd) { bd = d; best = v; }
   }
   return best;
@@ -503,6 +510,8 @@ function enterRick(force = false) {
     noise(0.1, 0.2, 600);
     if (npcs.cops.some((c) => Math.hypot(c.x - v.pos.x, c.z - v.pos.z) < 35)) addWanted(1);
   }
+  if (v.parked && !v.driver && v !== ownCar) toast('🔑 Khadi gaadi utha li! 😎', 1600);
+  v.ai = false; v.parked = false;
   car = v;
   rick = v.g;
   state.mode = 'drive';
@@ -1295,23 +1304,205 @@ function onHitNpc(n) {
   else if (npcs.cops.some((c) => Math.hypot(c.x - n.x, c.z - n.z) < 70)) addWanted(1);
 }
 function hurt(n) {
+  if (state.open === 'dead') return;
   state.hp -= n;
   lastHurt = state.t;
   flash('slap');
   state.hurtUntil = state.t + 0.3;
   if (state.hp <= 0) behosh();
 }
-function behosh() {
+function behosh() { wasted(); }
+
+// ---------- 💀 WASTED / 🚔 BUSTED / ❤️ LIFELINE (GTA style) ----------
+const MAX_LIVES = 3;
+function updateLivesHud() {
+  const el = $('lives');
+  if (!el) return;
+  el.textContent = '❤️'.repeat(state.lives) + '🖤'.repeat(Math.max(0, MAX_LIVES - state.lives));
+}
+function deathScreen(kind, title, sub, after) {
+  if (state.open === 'dead') return;
+  cancelSeq();
+  closeSheets();
   if (weapons.aiming) stopAim();
+  if (state.scene) endScene();
+  state.open = 'dead';
   if (state.mode === 'drive') exitRick(true);
+  state.pose = kind === 'wasted' ? 'fall' : 'hands';
+  if (kind === 'wasted') me.root.rotation.x = -Math.PI / 2;
+  const el = $('deathScreen');
+  el.className = 'death ' + kind;
+  $('deathTitle').textContent = title;
+  $('deathSub').textContent = sub;
+  document.body.classList.add('dead');
+  if (kind === 'wasted') { glide(300, 60, 1.2, 'sawtooth', 0.08); noise(0.4, 0.3, 150); }
+  else { sirenSfx(); setTimeout(sirenSfx, 1000); }
+  setTimeout(() => {
+    document.body.classList.remove('dead');
+    el.className = 'death hidden';
+    me.root.rotation.x = 0;
+    state.pose = null;
+    state.open = null;
+    after();
+  }, 3800);
+}
+function loseLife() {
+  state.lives = Math.max(0, state.lives - 1);
+  state.lifeRegen = 0;
+  updateLivesHud();
+  return state.lives;
+}
+function respawnAt(x, z, h) {
   state.onRoof = false;
   state.hp = 100;
   state.wanted = 0;
-  setMoney(Math.round(state.money * 0.85));
-  walker.pos.set(-58, 0, 4); walker.heading = Math.PI / 2; footYaw = walker.heading;
+  state.wantedQuiet = 0;
+  state.caughtCd = state.t + 8;
+  walker.pos.set(x, 0, z); walker.heading = h; footYaw = h;
+  walker.vy = 0; walker.y = 0;
+  const near = findParking(x, z);
+  if (near && ownCar.dead !== true) { ownCar.pos.copy(near); ownCar.speed = 0; }
   snapCam = true;
+  saveGame();
+}
+function wasted() {
+  if (state.open === 'dead') return;
+  const left = loseLife();
+  const fee = Math.min(state.money, Math.max(50, Math.round(state.money * 0.15)));
+  deathScreen('wasted', 'WASTED 💀', left > 0 ? `Aspatal ka bill ₹${fee} • ❤️ ${left} lifeline baaki` : 'Saari lifeline khatam!', () => {
+    if (left <= 0) return gameOver();
+    setMoney(state.money - fee);
+    respawnAt(-58, 4, Math.PI / 2); // Mandir ke saamne hosh aaya
+    toast(`🏥 Hosh aa gaya… ₹${fee} ilaaj mein gaye. ❤️ ${left} baaki`, 3500);
+  });
+}
+function busted() {
+  if (state.open === 'dead') return;
+  const left = loseLife();
+  const fine = Math.min(state.money, Math.max(100, Math.round(state.money * 0.2)));
+  const hadGuns = Object.keys(weapons.owned).length > 0;
+  deathScreen('busted', 'BUSTED 🚔', left > 0 ? `Jurmana ₹${fine}${hadGuns ? ' • Hathiyar zabt' : ''} • ❤️ ${left} lifeline baaki` : 'Saari lifeline khatam!', () => {
+    if (left <= 0) return gameOver();
+    setMoney(state.money - fine);
+    // GTA jaisa: police hathiyar zabt kar leti hai
+    for (const k of Object.keys(weapons.owned)) delete weapons.owned[k];
+    weapons.equip(null);
+    if (state.weapon) { state.weapon = null; hold(me, null); setOverlay(me, null); }
+    respawnAt(THANA_OUT.x, THANA_OUT.z, THANA_OUT.h);
+    toast(`🚓 Thane se chhoot gaye… ₹${fine} jurmana${hadGuns ? ', bandook zabt' : ''}. ❤️ ${left} baaki`, 3800);
+  });
+}
+const THANA_OUT = { x: 112, z: 136, h: Math.PI / 2 };
+function gameOver() {
+  dialog({
+    kind: 'gameover', avatar: '☠️', title: 'GAME OVER', sub: 'Saari lifeline khatam',
+    line: 'Mohalla phir se shuru hoga — paisa, jhola aur hathiyar reset. Respect, story aur look bache rahenge.',
+    options: [{ n: '🔄 Phir se shuru karo', cls: 'good', on: () => {
+      closeSheets();
+      state.lives = MAX_LIVES; updateLivesHud();
+      state.bag = [];
+      for (const k of Object.keys(weapons.owned)) delete weapons.owned[k];
+      weapons.equip(null);
+      state.weapon = null; hold(me, null); setOverlay(me, null);
+      setMoney(300);
+      respawnAt(0, 80, 0);
+      ownCar.dead = false; ownCar.hp = 100;
+      ownCar.pos.set(0, 0, 80); ownCar.heading = 0; ownCar.speed = 0;
+      car = ownCar; rick = ownCar.g;
+      enterRick(true);
+      toast('🛺 Naya din, nayi shuruaat! ❤️❤️❤️', 3000);
+    } }],
+  });
+}
+
+// ---------- 💨 DHUAAN / GAADI KA NUKSAAN ----------
+const smokeTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 2, 32, 32, 31);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.5, 'rgba(255,255,255,.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+})();
+const puffs = [];
+function puff(x, y, z, { color = 0x8a8a8a, size = 1, life = 1.6, up = 1.2, spread = 0.6, fire = false } = {}) {
+  let p = puffs.find((q) => q.t <= 0);
+  if (!p) {
+    if (puffs.length > 140) return;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, transparent: true, depthWrite: false }));
+    scene.add(sp);
+    p = { sp, t: 0 };
+    puffs.push(p);
+  }
+  p.sp.material.color.setHex(color);
+  p.sp.material.blending = fire ? THREE.AdditiveBlending : THREE.NormalBlending;
+  p.sp.material.toneMapped = !fire;
+  p.sp.position.set(x + (Math.random() - 0.5) * spread, y, z + (Math.random() - 0.5) * spread);
+  p.vx = (Math.random() - 0.5) * spread; p.vz = (Math.random() - 0.5) * spread; p.vy = up * (0.6 + Math.random() * 0.6);
+  p.t = p.life = life * (0.7 + Math.random() * 0.6); p.size = size; p.fire = fire;
+  p.sp.visible = true;
+}
+function updatePuffs(dt) {
+  for (const p of puffs) {
+    if (p.t <= 0) continue;
+    p.t -= dt;
+    const k = 1 - p.t / p.life;
+    p.sp.position.x += p.vx * dt; p.sp.position.y += p.vy * dt; p.sp.position.z += p.vz * dt;
+    p.sp.scale.setScalar(p.size * (0.5 + k * (p.fire ? 0.8 : 2.2)));
+    p.sp.material.opacity = Math.max(0, (1 - k) * (p.fire ? 0.9 : 0.55));
+    if (p.t <= 0) p.sp.visible = false;
+  }
+}
+function crashFx(v, speed, x = v.pos.x, z = v.pos.z) {
+  if (!v || v.dead) return;
+  v.hp = (v.hp ?? 100) - Math.min(45, speed * 2.2);
+  const n = Math.min(14, 4 + Math.round(speed));
+  for (let i = 0; i < n; i++) puff(x, 0.6 + Math.random() * 0.6, z, { color: i % 3 ? 0x9a9a9a : 0xd8d0c0, size: 1.1, life: 1.2, up: 1.6, spread: 2.2 });
+  for (let i = 0; i < 4; i++) puff(x, 0.8, z, { color: 0xffb040, size: 0.35, life: 0.25, up: 2, spread: 3, fire: true });
+  if (v.hp <= 0) explode(v);
+  else if (v === car && state.mode === 'drive' && v.hp < 35) toast(`🔥 Gaadi ki haalat kharab — ${Math.max(0, Math.round(v.hp))}% • Utar jao! (F)`, 2000);
+}
+function explode(v) {
+  v.dead = true; v.hp = 0; v.speed = 0; v.burnT = 9;
+  const { x, z } = v.pos;
+  for (let i = 0; i < 26; i++) puff(x, 0.8 + Math.random(), z, { color: i % 2 ? 0xff7a1a : 0xffd040, size: 2.2, life: 0.7, up: 3, spread: 4, fire: true });
+  for (let i = 0; i < 20; i++) puff(x, 1, z, { color: 0x1a1a1a, size: 2.4, life: 2.6, up: 2.5, spread: 3.5 });
+  noise(0.9, 0.9, 80); glide(120, 30, 1, 'sawtooth', 0.12);
   flash('fire');
-  toast(MISC3[L()].behosh, 4000);
+  if (v.driver) { const d = v.driver; v.driver = null; const n = npcs.adoptWalker(d, x + 2.5, z, v.pos); n.flee = 6; }
+  v.ai = false;
+  const p = state.mode === 'drive' ? car.pos : walker.pos;
+  const d = Math.hypot(p.x - x, p.z - z);
+  if (v === car && state.mode === 'drive') { exitRick(true); hurt(55); toast('💥 GAADI PHAT GAYI!', 2200); }
+  else if (d < 6) hurt(Math.round(40 * (1 - d / 6)) + 10);
+  npcs.panic(v.pos, 30);
+}
+let smokeT = 0;
+function updateVehicleDamage(dt) {
+  updatePuffs(dt);
+  smokeT -= dt;
+  const emit = smokeT <= 0;
+  if (emit) smokeT = 0.12;
+  const cam = camera.position;
+  for (const v of [ownCar, ...traffic.vehicles]) {
+    if (v.burnT > 0) {
+      v.burnT -= dt;
+      if (v.burnT <= 0) {
+        // jal ke thanda — mistri ne theek kar diya
+        v.dead = false; v.hp = 100;
+        if (v === ownCar) { const pk = findParking(walker.pos.x, walker.pos.z); if (pk && state.mode === 'foot') ownCar.pos.copy(pk); setMoney(state.money - Math.min(state.money, 80)); toast('🔧 Mistri ne tumhara auto theek karke paas khada kar diya (-₹80)', 3200); }
+      }
+    }
+    const hp = v.hp ?? 100;
+    if (!emit || hp >= 60 || Math.hypot(v.pos.x - cam.x, v.pos.z - cam.z) > 90) continue;
+    const ex = v.pos.x + Math.sin(v.heading) * (v.len || 3.4) * 0.35, ez = v.pos.z + Math.cos(v.heading) * (v.len || 3.4) * 0.35;
+    if (v.dead) {
+      puff(v.pos.x, 1, v.pos.z, { color: 0x111111, size: 1.8, life: 2.2, up: 2.2, spread: 1.5 });
+      puff(v.pos.x, 0.9, v.pos.z, { color: 0xff6a10, size: 1.1, life: 0.5, up: 1.6, spread: 1.4, fire: true });
+    } else if (hp < 25) {
+      puff(ex, 1, ez, { color: 0x2a2a2a, size: 1.2, life: 1.8, up: 1.6, spread: 0.6 });
+      if (Math.random() < 0.5) puff(ex, 0.9, ez, { color: 0xff7a20, size: 0.5, life: 0.35, up: 1.2, spread: 0.4, fire: true });
+    } else if (Math.random() < 0.6) puff(ex, 1, ez, { color: 0x9a9a9a, size: 0.9, life: 1.6, up: 1.3, spread: 0.5 });
+  }
 }
 let lastHp = -1;
 function updateHpHud() {
@@ -1338,7 +1529,7 @@ function saveGame(manual = false) {
     v: 1, money: state.money, respect: missions.respect(), story: story.done, guns: { ...weapons.owned },
     bag: state.bag.map((b) => ({ ...b })), lang: state.lang, level: state.age18 ? state.level : Math.min(1, state.level), age18: state.age18,
     look: { hairStyle: s.hairStyle, hair: s.hair, beard: s.beard, top: s.top, outfit: s.outfit, shades: s.shades },
-    cineFx: state.cineFx, at: Date.now(),
+    cineFx: state.cineFx, lives: state.lives, at: Date.now(),
   };
   try { localStorage.setItem('mohalla.save', JSON.stringify(data)); localStorage.setItem('mohalla.respect', String(data.respect)); } catch { /* ok */ }
   if (manual) toast(MISC3[L()].saved + (cloud.user ? ' ☁️' : ''), 1500);
@@ -1435,6 +1626,7 @@ function loadGame(raw) {
     setLevel(d.level || 0);
     if (d.look) { Object.assign(me.spec, d.look); me.rebuild(); }
     if (typeof d.cineFx === 'boolean') state.cineFx = d.cineFx;
+    if (d.lives > 0) state.lives = Math.min(MAX_LIVES, d.lives);
     return true;
   } catch { return false; }
 }
@@ -1495,7 +1687,7 @@ let started = false, lastCowToast = 0, snapCam = false, lastAnimalToast = 0, las
 function updateCar(dt) {
   const k = (c) => (keys[c] ? 1 : 0);
   let throttle = 0, steer = 0;
-  if (!state.open && state.mode === 'drive') {
+  if (!state.open && state.mode === 'drive' && !car.dead) {
     throttle = k('KeyW') + k('ArrowUp') - k('KeyS') - k('ArrowDown') - joy.y;
     steer = k('KeyA') + k('ArrowLeft') - k('KeyD') - k('ArrowRight') - joy.x;
     if (state.t < (state.drunkUntil || 0) && Math.abs(car.speed) > 2) steer += Math.sin(state.t * 1.4) * 0.45;
@@ -1510,10 +1702,11 @@ function updateCar(dt) {
   car.heading += steer * 2.2 * dt * THREE.MathUtils.clamp(car.speed / 5, -1, 1);
   const nx = car.pos.x - Math.sin(car.heading) * car.speed * dt;
   const nz = car.pos.z - Math.cos(car.heading) * car.speed * dt;
-  if (driveable(nx, nz)) car.pos.set(nx, 0, nz);
+  const stuckOff = !driveable(car.pos.x, car.pos.z); // footpath pe khadi thi to bahar nikalne do
+  if (driveable(nx, nz) || (stuckOff && footable(nx, nz))) car.pos.set(nx, 0, nz);
   else if (driveable(nx, car.pos.z)) { car.pos.x = nx; car.speed *= 0.97; }
   else if (driveable(car.pos.x, nz)) { car.pos.z = nz; car.speed *= 0.97; }
-  else { if (Math.abs(car.speed) > 7 && t - lastCrash > 1) { lastCrash = t; noise(0.2, 0.4, 200); missions.notify('crash'); } car.speed *= -0.3; }
+  else { if (Math.abs(car.speed) > 7 && t - lastCrash > 1) { lastCrash = t; noise(0.2, 0.4, 200); missions.notify('crash'); crashFx(car, Math.abs(car.speed), car.pos.x - Math.sin(car.heading) * (car.len || 3.4) / 2, car.pos.z - Math.cos(car.heading) * (car.len || 3.4) / 2); } car.speed *= -0.3; }
 
   for (const cow of world.cows) {
     const dx = car.pos.x - cow.x, dz = car.pos.z - cow.z, d = Math.hypot(dx, dz);
@@ -1537,7 +1730,7 @@ function updateCar(dt) {
     const dx = car.pos.x - v.pos.x, dz = car.pos.z - v.pos.z, d = Math.hypot(dx, dz), min = (car.radius || 1) + (v.radius || 1) + 0.5;
     if (d < min && d > 0.01) {
       car.pos.x += (dx / d) * (min - d); car.pos.z += (dz / d) * (min - d);
-      if (Math.abs(car.speed) > 6 && t - lastCrash > 1) { lastCrash = t; noise(0.25, 0.5, 200); toast(fight('honk'), 1800); missions.notify('crash'); }
+      if (Math.abs(car.speed) > 6 && t - lastCrash > 1) { lastCrash = t; noise(0.25, 0.5, 200); toast(fight('honk'), 1800); missions.notify('crash'); const sp = Math.abs(car.speed); crashFx(car, sp, (car.pos.x + v.pos.x) / 2, (car.pos.z + v.pos.z) / 2); crashFx(v, sp * 0.8); }
       car.speed *= -0.25;
     }
   }
@@ -1631,6 +1824,7 @@ function updateWalker(dt) {
     else setAction(me, 'jump');
   }
   if (t < state.hurtUntil) setAction(me, 'hurt');
+  if (state.pose) setAction(me, state.pose);
   if (weapons.aiming) { walker.heading = aimYaw; footYaw = aimYaw; me.aimPitch = aimPitch; }
   me.look *= 0.92;
   me.root.position.set(walker.pos.x, groundY() + walker.y, walker.pos.z);
@@ -1799,6 +1993,7 @@ function updateStatus() {
   if (story?.active) chips.push('🅼 Mission chal raha hai');
   if (t < state.dogFriendUntil) chips.push('🐕 Kalu saath hai');
   if (t < state.catUntil) chips.push('🐈 Billi saath hai');
+  if (state.mode === 'drive' && (car.hp ?? 100) < 100) chips.push(`${car.hp < 25 ? '🔥' : car.hp < 60 ? '💨' : '🔧'} Gaadi ${Math.max(0, Math.round(car.hp))}%`);
   chips.push(`🏅 Respect Lv ${missions.level()}`);
   if (state.level === 2) chips.push('🔞 18+');
   const html = chips.map((c) => `<span class="chip">${c}</span>`).join('');
@@ -1849,7 +2044,8 @@ function tick() {
   const events = npcs.update(dt, t, {
     player: ctxPlayer, camera, tod: state.tod, party, vehG: rick, passenger: car.passenger || new THREE.Vector3(0.45, 0.42, 0.95),
     gfSeat: car.kind === 'auto' ? GF_SEAT_AUTO : null,
-    wanted: t < state.escapeUntil || state.open === 'police' ? 0 : state.wanted, activeShop: state.activeShop,
+    wanted: t < state.escapeUntil || state.open === 'police' || state.open === 'dead' ? 0 : state.wanted, activeShop: state.activeShop,
+    copsShoot: state.wanted >= 2 && state.open !== 'dead' && t > state.escapeUntil,
   });
   if (started) {
     for (const e of events) {
@@ -1872,7 +2068,8 @@ function tick() {
       } else if (e.type === 'getup') {
         ui3d.bubble(e.n.h.root, e.n.angryPending ? fight('victim') : gaali('hitPed') || pick(PED[L()].hit), 'loud', 3);
       } else if (e.type === 'caught' && !state.open && t > state.caughtCd && state.wanted > 0) {
-        openCaught();
+        // 1 star = challan ka mauka; 2+ star = seedha BUSTED 🚔
+        if (state.wanted >= 2) busted(); else openCaught();
       } else if (e.type === 'ride') toast(X().gfRide(e.n.girl.name), 2200);
       else if (e.type === 'punched') {
         state.hurtUntil = t + 0.45; state.stunUntil = t + 0.4;
@@ -1907,6 +2104,12 @@ function tick() {
   if (station.update(t, dt, active.pos) === 'horn') { glide(220, 210, 1.4, 'sawtooth', 0.05); glide(330, 320, 1.4, 'sawtooth', 0.03); toast('🚂 Chhuk chhuk! Train aa rahi hai', 2000); }
   if (started) { missions.update(dt, t); story.update(dt, t); weapons.update(dt); }
   if (started && t - lastHurt > 6 && state.hp < 100) { state.hp = Math.min(100, state.hp + dt * 5); }
+  if (started) {
+    updateVehicleDamage(dt);
+    if (state.lives <= 0 && !state.open) gameOver(); // popup band kar diya to bhi wapas aaye
+    // har 5 minute mein ek lifeline wapas
+    if (state.lives < MAX_LIVES) { state.lifeRegen += dt; if (state.lifeRegen > 300) { state.lifeRegen = 0; state.lives++; updateLivesHud(); toast('❤️ Ek lifeline wapas mili!', 2200); } }
+  }
   updateHpHud();
   if (world.barberMirror) { const k = npcs.keepers.barber; world.barberMirror.visible = !!k && Math.hypot(active.pos.x - k.x, active.pos.z - k.z) < 14 && state.mode === 'foot'; }
   $('cross').classList.toggle('hidden', !weapons.aiming || weapons.cur === 'sniper');
@@ -2039,6 +2242,7 @@ async function boot() {
   $('btnRetro').textContent = '🎬';
   if (location.search.includes('debug')) window.__m = { state, npcs, walker, get car() { return car; }, openGirl, toggleRide, teleport, openShop, world, interact, get traffic() { return traffic; }, attack, jump, openMusic, music, musicUI, get missions() { return missions; }, get ui3d() { return ui3d; }, get weapons() { return weapons; }, get story() { return story; }, toggleLift, startAim, stopAim, shoot, setAim: (y, p) => { aimYaw = y; aimPitch = p; }, buy: (id, n) => { const tr = world.triggers.find((t) => t.def.id === id); openShop(tr.def, tr); [...document.querySelectorAll('#shopItems .item')].find((b) => b.textContent.includes(n)).click(); } };
   $('money').textContent = state.money;
+  updateLivesHud();
   // ☁️ Firebase — background mein; fail ho to game offline chalta hai
   $('btnGoogle').onclick = () => googleLogin();
   setCloudStatus('⏳ Cloud se jud rahe hain…');

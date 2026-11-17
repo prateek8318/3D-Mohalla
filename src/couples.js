@@ -33,15 +33,17 @@ export function buildCouples(scene) {
     const seat = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.1, 0.55), M(0x7a4a2a));
     seat.position.y = 0.45; bench.add(seat);
     const back = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.5, 0.1), M(0x7a4a2a));
-    back.position.set(0, 0.72, -0.24); bench.add(back);
+    back.position.set(0, 0.72, 0.24); bench.add(back); // peeth ke peeche (log -Z ki taraf mooh karke baithte hain)
     for (const x of [-0.85, 0.85]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.45, 0.5), M(0x5a3a22)); l.position.set(x, 0.22, 0); bench.add(l); }
     scene.add(bench);
 
     const he = makeHuman({ female: false, old: Math.random() < 0.2 });
     const she = makeHuman({ female: true, outfit: Math.random() < 0.5 ? 'saree' : 'salwar' });
     const fx = -Math.sin(s.h), fz = -Math.cos(s.h), rx = Math.cos(s.h), rz = -Math.sin(s.h);
-    he.root.position.set(s.x - rx * 0.45, 0.02, s.z - rz * 0.45);
-    she.root.position.set(s.x + rx * 0.45, 0.02, s.z + rz * 0.45);
+    // seat ke upar (hips seat ki oonchai pe), thoda peeche taaki ghutne aage latkein
+    const bx = -fx * 0.06, bz = -fz * 0.06, SEAT_Y = 0.1;
+    he.root.position.set(s.x - rx * 0.42 + bx, SEAT_Y, s.z - rz * 0.42 + bz);
+    she.root.position.set(s.x + rx * 0.42 + bx, SEAT_Y, s.z + rz * 0.42 + bz);
     he.root.rotation.y = s.h; she.root.rotation.y = s.h;
     scene.add(he.root, she.root);
     setAction(he, 'sit'); setAction(she, 'sit');
@@ -57,8 +59,12 @@ export function buildCouples(scene) {
         if (!vis) continue;
         c.leanT -= dt;
         const lean = c.leanT < 1.4 && c.leanT > 0;
-        setAction(c.he, lean ? 'hug' : 'sit');
-        setAction(c.she, lean ? 'hug' : 'sit');
+        // 'hug' pose khade hone wala hai — bench pe baithe baithe hi ek doosre ki taraf jhuko
+        setAction(c.he, 'sit');
+        setAction(c.she, 'sit');
+        const k = Math.min(1, dt * 3);
+        c.she.root.rotation.z += ((lean ? 0.2 : 0) - c.she.root.rotation.z) * k;
+        c.he.root.rotation.z += ((lean ? -0.1 : 0) - c.he.root.rotation.z) * k;
         c.he.look = Math.sin(t * 0.6 + c.phase) * 0.25 + 0.3;
         c.she.look = -0.3 - Math.sin(t * 0.6 + c.phase) * 0.2;
         if (c.leanT <= 0) c.leanT = 6 + Math.random() * 10;

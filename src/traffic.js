@@ -88,6 +88,21 @@ export function buildTraffic(scene, { isTouch }) {
     vehicles.push(v);
   }
 
+  // sadak kinare khadi gaadiyan — khaali, koi bhi utha le 😈
+  const PARKED = [
+    ['taxi', -7.3, 62, 0], ['taxi', 7.3, -40, Math.PI], ['taxi', -7.3, -86, 0],
+    ['scooter', 7.7, 31, 0.3], ['scooter', -7.7, 90, -0.2], ['scooter', 7.7, -70, 0.1],
+    ['car', -7.3, 270, 0], ['auto', 7.3, 300, Math.PI], ['car', 100, -7.3, Math.PI / 2], ['scooter', -95, 7.7, -Math.PI / 2],
+  ];
+  for (const [kind, x, z, h] of PARKED) {
+    const v = kind === 'taxi' ? makeCar(true) : kind === 'car' ? makeCar(false) : kind === 'auto' ? makeAuto() : makeScooter();
+    Object.assign(v, { driver: null, ai: false, parked: true, route: ROUTES[0], dir: 1, s: 0, speed: 0, cruise: 0, pos: new THREE.Vector3(x, 0, z), heading: h, uturn: null, stuck: 0, honkCd: 0 });
+    v.g.position.copy(v.pos);
+    v.g.rotation.y = h;
+    scene.add(v.g);
+    vehicles.push(v);
+  }
+
   function frame(v) {
     const r = v.route;
     const f = r.axis === 'z' ? new THREE.Vector3(0, 0, v.dir) : new THREE.Vector3(v.dir, 0, 0);

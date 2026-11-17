@@ -443,6 +443,23 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
             if (d < 1.35 && (pl.mode === 'foot' || Math.abs(pl.speed) < 1.5)) ev.push({ type: 'caught', n });
             break;
           }
+          if (n.hunt) { // 🏃 chor ke peeche daud (mohalle wale + police)
+            const q = n.hunt;
+            n.huntT -= dt;
+            if (q.gone || q.fall > 0 || n.huntT <= 0) {
+              n.hunt = null;
+              if (q.fall > 0 && !q.gone) { n.pause = 3.5; n.pauseAct = 'point'; n.faceTo = { x: q.x, z: q.z }; } // gher ke khade
+              if (n.tmpCop) { const me_ = n; setTimeout(() => remove(me_), 7000); } else if (n.cop) n.mode = 'return'; else n.backToLane = true;
+              break;
+            }
+            const d = moveToward(n, q.x, q.z, n.cop ? 4.7 : 3.9 + (n.huntSp || 0), dt, 'any');
+            setAction(n.h, d > 1.3 ? 'run' : 'point');
+            if (isStuck(n, 1)) unstick(n);
+            n.shoutT -= dt;
+            if (n.shoutT <= 0) { n.shoutT = rnd(4, 9); ev.push({ type: 'huntShout', n }); }
+            if (n.cop && d < 1.3) { q.fall = 4; q.byCop = true; setAction(q.h, 'fall'); } // police ne daboch liya
+            break;
+          }
           if (n.flee > 0) {
             n.flee -= dt;
             // atak gaye to bhaagne ki disha ghuma do (deewar mein muh ghusa ke bhaagte nahi rehna)
@@ -877,7 +894,25 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
     const h = makeHuman({ outfit: 'tshirt', top: 0x222222, bottom: 0x3a3a3a, hat: 'cap', capColor: 0x111111, shades: true });
     return add(h, { type: 'thief', x, z, heading: 0 });
   }
+  /** chor (target) ke peeche paas ke mohalle wale aur police daudein; police paas na ho to gali se nikal aaye */
+  function hunt(target, nCiv = 4, nCop = 2) {
+    const dT = (n) => Math.hypot(n.x - target.x, n.z - target.z);
+    const set = (n, i) => { n.hunt = target; n.huntT = 70; n.huntSp = R() * 0.5; n.shoutT = 0.4 + i * 0.9; n.pause = 0; n.backToLane = false; };
+    npcs.filter((n) => n.type === 'walker' && !n.cop && !n.kidW && !n.girl && !n.goon && !n.h.spec.female && !n.h.spec.old && !n.h.spec.kid && !(n.fall > 0) && !(n.hidden > 0) && !n.talking && !n.spot && !n.riding && dT(n) < 38)
+      .sort((a, b) => dT(a) - dT(b)).slice(0, nCiv).forEach(set);
+    const near = cops.filter((c) => c.type === 'walker' && !(c.fall > 0) && c.mode !== 'chase' && dT(c) < 70).sort((a, b) => dT(a) - dT(b)).slice(0, nCop);
+    near.forEach((c, i) => { c.mode = null; set(c, i + 1); });
+    for (let i = near.length; i < nCop; i++) { // paas koi sipahi nahi → 14-20m door se daudta hua aaye
+      let x = target.x, z = target.z;
+      for (let k = 0; k < 20; k++) { const a = R() * Math.PI * 2, r = rnd(14, 20); const gx = target.x + Math.sin(a) * r, gz = target.z + Math.cos(a) * r; if (passable(gx, gz)) { x = gx; z = gz; break; } }
+      const h = makeHuman(COP);
+      hold(h, itemMesh('lathi'));
+      const c = add(h, { type: 'walker', cop: true, tmpCop: true, lane: LANES[0], f: R(), dir: 1, speed: 1.1, off: 0, x, z });
+      set(c, i + 1);
+    }
+  }
   function remove(n) {
+    n.gone = true;
     const i = npcs.indexOf(n);
     if (i >= 0) npcs.splice(i, 1);
     n.h.root.parent?.remove(n.h.root);
@@ -906,5 +941,5 @@ export function buildNPCs(scene, { world, places2, isTouch }) {
     return k;
   }
 
-  return { giveItem, npcs, update, nearestGirl, randomSidewalk, shootNpc, panic, spawnThief, remove, keepers, cops, jeep: J, salon, hitTest, knock, adoptWalker, girls: () => npcs.filter((n) => n.girl) };
+  return { giveItem, npcs, update, nearestGirl, randomSidewalk, shootNpc, panic, spawnThief, hunt, remove, keepers, cops, jeep: J, salon, hitTest, knock, adoptWalker, girls: () => npcs.filter((n) => n.girl) };
 }

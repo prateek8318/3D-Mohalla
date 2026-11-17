@@ -261,6 +261,7 @@ export function createMissions(ctx) {
     ctx.bubble(g.h.root, pick(T().chor), 'loud');
     g.pause = 6; g.pauseAct = 'point'; g.faceTo = th;
     m = { type: 'chor', thief: th, girl: g, timer: 75 };
+    npcs.hunt(th); // mohalle wale + police bhi peeche daudein
     ctx.sfx('alarm');
     ctx.toast('🏃 Chor! Pakdo use — ghoonsa (J) ya rickshaw se rok do!', 3000);
     return true;
@@ -554,12 +555,19 @@ export function createMissions(ctx) {
           if (!(th.fall > 0)) { th.fall = 4; setAction(th.h, 'fall'); }
           ctx.bubble(th.h.root, pick(tt.chorCaught));
           setTimeout(() => ctx.bubble(m?.girl?.h?.root || th.h.root, pick(tt.girlThanks), 'love'), 1200);
-          m.girl.girl.affinity += 0.3;
-          ctx.addMoney(150);
-          ctx.sfx('coin');
-          addRespect(15);
-          ctx.jobDone?.('chor');
-          ctx.toast('👮 Chor pakda gaya! Inaam ₹150 + respect ⬆️', 3000);
+          if (th.byCop && d > 6) { // tum door the — police ne pakad liya, chhota inaam
+            ctx.addMoney(40);
+            ctx.sfx('coin');
+            addRespect(4);
+            ctx.toast('👮 Police ne chor pakad liya! Madad ke ₹40 — agli baar tum pakdo 😉', 3200);
+          } else {
+            m.girl.girl.affinity += 0.3;
+            ctx.addMoney(150);
+            ctx.sfx('coin');
+            addRespect(15);
+            ctx.jobDone?.('chor');
+            ctx.toast('👮 Chor pakda gaya! Inaam ₹150 + respect ⬆️', 3000);
+          }
           beacon.visible = false;
         } else if (m.timer <= 0 || d > 170) {
           npcs.remove(th);

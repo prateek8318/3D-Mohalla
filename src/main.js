@@ -80,6 +80,60 @@ const FIGHT_SIT = {
   honk3: 'gaadi wala bahut der se phansa hai, insaan hat hi nahi raha, poore gusse mein chilla raha hai (asli sadak jaisa)',
 };
 const fight = (k) => FIGHT_SIT[k] ? aiLine(`fight:${k}:${L()}:${state.level}`, { who: 'mohalle ka aadmi', role: /honk/.test(k) ? 'gaadi chala raha driver' : 'aam aadmi', situation: FIGHT_SIT[k], lang: L(), spicy: state.level === 2 }, () => fightOld(k)) : fightOld(k);
+// 👊 JHAGDA — maar khaane wala har baar alag bole, aur baar-baar maaro to gussa badhta jaaye.
+// n = sanskaari, b = bakchodi (halki gaali), x = 18+ (khuli gaali). AI ho to Claude ki nayi lines, warna ye bhandaar.
+const FIGHTX = {
+  n: {
+    hit1: ['Arre! Maar kyun raha hai bhai?!', 'Oye! Pagal ho gaya hai kya?', 'Aaah! Ye kya badtameezi hai?', 'Abe haath kaise uthaya tune?', 'Arre arre! Maine kya bigaada tera?', 'Hosh mein to hai? Kyun maar raha hai?'],
+    hit2: ['Bas! Ek aur baar haath lagaya to dekh lena!', 'Dimaag kharab hai tera? Ruk, abhi batata hoon!', 'Tujhe kya lagta hai, main chup rahunga?', 'Ab had ho gayi, aaja saamne!', 'Mohalle walon! Dekho ye gunda maar raha hai!', 'Police ko bulaun kya? Ruk ja wahin!'],
+    hit3: ['Aaj tu gaya! Haddi-pasli ek kar dunga!', 'Bahut ho gaya, ab chhodunga nahi!', 'Arre koi pakdo isko, paagal ho gaya hai!', 'Tere baap ka raaj hai kya yahan?', 'Aaja, aaj faisla ho hi jaaye!'],
+    comeback: ['Ruk! Bhaag kahan raha hai ab?', 'Ab meri baari hai, hero!', 'Uth gaya main… ab tu dekh!', 'Itni aasaani se nahi chhodunga tujhe!', 'Aaja, ab mard ki tarah lad!'],
+    punched: ['Le! Kaisa laga?', 'Ek aur chahiye kya?', 'Ab bol, bada hero ban raha tha!', 'Ye le, yaad rakhega!', 'Dobara haath uthaya to isse bura hoga!', 'Akal thikaane aayi ya nahi?'],
+    witness: ['Arre arre, chhodo! Kyun lad rahe ho?', 'Koi police ko bulao!', 'Jhagda ho gaya, jhagda!', 'Oye, chhod usko! Mar jaayega!', 'Ye roz ka ho gaya hai is mohalle mein', 'Bhai shaant ho jao, baat kar lo'],
+  },
+  b: {
+    hit1: ['Abe saale! Maarta kyun hai?!', 'Oye kamine! Haath kaise uthaya?', 'Abe gadhe, dimaag ghaas charne gaya hai kya?', 'Saala paagal kutta! Kaat-ta kyun hai?', 'Abe ullu ke patthe, ye kya tha?!'],
+    hit2: ['Saale, ab tu pitega! Ruk wahin!', 'Kamine, teri to… aaja saamne!', 'Abe haraamkhor, do baar maar diya? Ab dekh!', 'Tere jaise chhapri roz dekhta hoon, aaja!', 'Saale ki akal thikaane lagani padegi!'],
+    hit3: ['Aaj tera band bajaunga, kamine!', 'Saale, teri haddi ka surma bana dunga!', 'Haraami! Aaj tu seedha ghar nahi jaayega!', 'Abe o chirkut, bahut ho gaya!'],
+    comeback: ['Bhaag mat saale, ruk!', 'Ab aaya oont pahaad ke neeche!', 'Kamine, ab meri baari!', 'Uth gaya main, ab tu let saale!'],
+    punched: ['Le saale! Maza aaya?', 'Kha ek aur, kamine!', 'Ab bol, gadhe!', 'Hero banega saala? Ye le!', 'Dimaag thikaane aaya, ullu?'],
+    witness: ['Abe chhodo yaar, kya tamasha hai!', 'Saale dono paagal hain!', 'Maar maar! Free ka picture hai 😂', 'Oye, police aa jaayegi, bhaago!', 'Arre koi chhudao in kameenon ko!'],
+  },
+  x: {
+    hit1: ['Madarchod! Maarta kyun hai?!', 'Bhenchod, haath kaise uthaya tune?!', 'Abe bhosdike, paagal hai kya?!', 'Gaandu, kis baat ki khujli hai tujhe?', 'Chutiye, galat aadmi se panga le liya!'],
+    hit2: ['Bhosdike, ab tu gaya! Ruk wahin!', 'Madarchod, do baar? Aaja saamne!', 'Bhenchod, aaj tera keema banega!', 'Gaandu saale, ab dekh mera haath!', 'Teri himmat kaise hui, harami ke pille?!'],
+    hit3: ['Aaj teri gaand tod dunga, madarchod!', 'Bhosdike, aaj chhodunga nahi tujhe!', 'Bhenchod, bahut ho gaya! Aaja!', 'Chutiye, teri haddi-pasli ek kar dunga!'],
+    comeback: ['Bhaag mat bhosdike, ruk!', 'Ab meri baari hai, madarchod!', 'Uth gaya main, ab tu let bhenchod!', 'Kahan jaa raha hai gaandu? Idhar aa!'],
+    punched: ['Le bhosdike! Kaisa laga?', 'Kha madarchod, ek aur kha!', 'Ab bol, chutiye!', 'Hero banega bhenchod? Ye le!', 'Akal aayi gaandu, ya aur doon?'],
+    witness: ['Abe bhosdike, chhod usko!', 'Madarchod dono lad rahe hain, police bulao!', 'Maar bhenchod ko! 😂', 'Chutiye, mohalle mein danga karega?', 'Pakdo is chutiye ko!'],
+  },
+};
+const FIGHTX_SIT = {
+  hit1: 'kisi ne ise achaanak bina wajah ghoonsa maara — pehli baar; hairaani aur gussa',
+  hit2: 'wahi banda ise doosri baar maar raha hai — ab bhadak gaya, dhamki de raha hai',
+  hit3: 'teesri-chauthi baar maar khayi — aape se bahar, poore gusse mein lalkaar raha hai',
+  comeback: 'maar kha ke gir gaya tha, ab uth ke maarne wale pe jhapat raha hai',
+  punched: 'isne abhi player ko ghoonsa jad diya aur taana maar raha hai',
+  witness: 'saamne do log maar-peet kar rahe hain, ye raah chalta tamashbeen bol raha hai',
+};
+const HUNT_LINES = {
+  civ: ['Chor! Chor! Pakdo usko!', 'Pakdo pakdo! Bhaagne mat dena!', 'Arre rok usko! Purse le ke bhaag raha hai!', 'Gher lo isko, udhar se aao!', 'Chor hai chor! Rok lo!', 'Aage se pakdo, aage se!'],
+  cop: ['Ruk ja! Police!', 'Bhaag mat, warna lathi padegi!', 'Oye ruk! Seedha thane chal!', 'Pakdo isko! Ghera daalo!', 'Ruk ja be, kahan tak bhaagega?'],
+};
+// wahi line lagataar dobara na aaye
+const lastPicks = new Map();
+function pickNew(key, arr) {
+  const rec = lastPicks.get(key) || [];
+  const pool = arr.filter((l) => !rec.includes(l));
+  const l = pick(pool.length ? pool : arr);
+  rec.push(l); if (rec.length > Math.min(4, arr.length - 1)) rec.shift();
+  lastPicks.set(key, rec);
+  return l;
+}
+function fightLine(stage) {
+  const tier = state.level === 2 ? 'x' : state.level === 1 ? 'b' : 'n';
+  return aiLine(`fx:${stage}:${L()}:${state.level}`, { who: 'mohalle ka aadmi', role: stage === 'witness' ? 'raah chalta tamashbeen' : 'aam aadmi, jhagde mein', situation: FIGHTX_SIT[stage] + (state.level === 1 ? '. Halki desi gaali chalegi (saala, kamina, gadha, ullu) — bhaari gaali nahi.' : ''), lang: L(), spicy: state.level === 2 }, () => pickNew(`fx:${stage}:${tier}`, FIGHTX[tier][stage]));
+}
 const X = () => UIX[L()];
 
 // ---------- RENDERER ----------
@@ -990,8 +1044,8 @@ function girlLine(key) {
 // Popup turant band — jawab duniya mein bubble ban ke dikhe, action aankhon ke saamne ho
 const bubDur = (txt) => Math.min(7, Math.max(2.8, (txt || '').length / 13));
 // 🗣️ baat-cheet ki aawazein: hero ki hamesha ek, har ladki ki apni ek — aur ek-doosre ki baat nahi kaat-te
-const HERO_VO = { priority: true, female: false, who: 'hero' };
-const girlVo = (n) => ({ priority: true, queue: true, female: true, who: 'girl:' + n.girl.name });
+const HERO_VO = { priority: true, female: false, who: 'hero', quick: true, rate: 1.12 };
+const girlVo = (n) => ({ priority: true, queue: true, female: true, who: 'girl:' + n.girl.name, rate: 1.08 });
 function meSay(text, cls = '') { ui3d.bubble(me.root, text, cls, bubDur(text), null, HERO_VO); }
 function girlReact(n, text, { cls = '', act = 'talk', sub } = {}) {
   const dur = bubDur(text);
@@ -1009,6 +1063,8 @@ function handOver(n, mesh, after = 900) {
     setTimeout(() => hold(n.h, null), 2600);
   }, after);
 }
+// 💗 kitni pat gayi — dialog mein dikhe (100% ke aas-paas propose pakka)
+const girlSub = (g) => (g.gf ? 'Tumhari girlfriend 💞' : `Mohalle ki ${g.name} • 💗 ${Math.round(Math.max(0, Math.min(1, (g.affinity + 0.1) / 0.7)) * 100)}%`);
 function openGirl(n) {
   const g = n.girl;
   const opts = g.gf ? [
@@ -1035,7 +1091,7 @@ function openGirl(n) {
     { n: '😘 Seeti maaro / chhedo', cls: 'danger', d: 'Galat baat — anjaam bhugtoge', on: () => tease(n) },
     { n: '👋 Bye', on: () => closeSheets() },
   ];
-  dialog({ kind: 'girl', avatar: g.gf ? '💞' : '👩', title: g.name, sub: g.gf ? 'Tumhari girlfriend' : `Mohalle ki ${g.name}`, line: g.slapped > 0 ? '…phir aa gaye? 😒' : aiLine(`girl:${g.name}:${L()}:${!!g.gf}`, { who: g.name, role: g.gf ? 'player ki girlfriend, mohalle ki ladki' : 'mohalle ki ladki, player ko thoda jaanti hai', situation: g.gf ? 'boyfriend mila, pyaar se baat' : 'player paas aa ke baat karna chahta hai, thoda nakhra/sharam/mazaak', lang: L(), spicy: false }, () => pick(GIRL[L()].hello)), options: opts, female: true, voice: { female: true, who: 'girl:' + g.name } });
+  dialog({ kind: 'girl', avatar: g.gf ? '💞' : '👩', title: g.name, sub: girlSub(g), line: g.slapped > 0 ? '…phir aa gaye? 😒' : aiLine(`girl:${g.name}:${L()}:${!!g.gf}`, { who: g.name, role: g.gf ? 'player ki girlfriend, mohalle ki ladki' : 'mohalle ki ladki, player ko thoda jaanti hai', situation: g.gf ? 'boyfriend mila, pyaar se baat' : 'player paas aa ke baat karna chahta hai, thoda nakhra/sharam/mazaak', lang: L(), spicy: false }, () => pick(GIRL[L()].hello)), options: opts, female: true, voice: { female: true, who: 'girl:' + g.name, rate: 1.08 } });
   n.talking = true;
   state.talkGirl = n;
   openChat(n);
@@ -1124,7 +1180,9 @@ async function girlChat(n, text, { propose: prop = false, mic = false } = {}) {
   g.chatBusy = false;
   g.chat.push({ who: 'girl', text: r.reply });
   if (g.chat.length > 30) g.chat.splice(0, g.chat.length - 30);
-  g.affinity = Math.max(-0.5, Math.min(1.5, g.affinity + (Number(r.affinity) || 0) * 0.07));
+  const da = Number(r.affinity) || 0;
+  g.affinity = Math.max(-0.5, Math.min(1.5, g.affinity + da * (da > 0 ? 0.12 : 0.07))); // achhi baat ka asar zyada
+  if (open()) $('shopOwner').textContent = girlSub(g);
   const cls = r.mood === 'angry' || r.mood === 'annoyed' ? 'loud' : r.mood === 'love' || r.mood === 'shy' || r.mood === 'flirty' ? 'love' : '';
   if (open()) {
     $('shopSay').classList.remove('typing'); $('chatBar').classList.remove('busy');
@@ -2381,7 +2439,16 @@ function attack() {
       flash('slap');
       if (n.cop) { addWanted(2); toast(FIGHT[L()].copHit, 2400); }
       else {
-        toast(fight('victim'), 2200);
+        // maar khaane wala khud bole (bubble + aawaz) — har baar naya, gussa badhta hua
+        if (state.t - (n.hitAt || -99) > 45) n.hits = 0; // purana jhagda bhool gaya
+        n.hitAt = state.t; n.hits = (n.hits || 0) + 1;
+        ui3d.bubble(n.h.root, fightLine(n.hits === 1 ? 'hit1' : n.hits === 2 ? 'hit2' : 'hit3'), 'loud', 3, null, { priority: true });
+        if (n.hits >= 2 && !n.kidW && n.type === 'walker') n.angryPending = true; // do baar maara → uth ke badla lega
+        const wit = npcs.npcs.filter((o) => o !== n && o.type === 'walker' && !o.cop && !(o.fall > 0) && !(o.hidden > 0) && Math.hypot(o.x - n.x, o.z - n.z) < 12);
+        if (wit.length && Math.random() < 0.7) { // tamashbeen
+          const o = pick(wit);
+          setTimeout(() => { if (o.fall > 0) return; ui3d.bubble(o.h.root, fightLine('witness'), '', 3, null, { priority: true, queue: true }); o.pause = 3; o.pauseAct = 'point'; o.faceTo = { x: n.x, z: n.z }; }, 900);
+        }
         if (npcs.cops.some((c) => Math.hypot(c.x - walker.pos.x, c.z - walker.pos.z) < 35)) addWanted(1);
       }
     }
@@ -2870,7 +2937,9 @@ function tick() {
         gunSfx('katta', 0.5);
         if (e.hit) { hurt(9); toast('💥 Police ki goli lagi!', 1200); }
       } else if (e.type === 'getup') {
-        ui3d.bubble(e.n.h.root, e.n.angryPending ? fight('victim') : gaali('hitPed') || pick(PED[L()].hit), 'loud', 3);
+        ui3d.bubble(e.n.h.root, e.n.angryPending ? fightLine('comeback') : gaali('hitPed') || pick(PED[L()].hit), 'loud', 3);
+      } else if (e.type === 'huntShout') {
+        ui3d.bubble(e.n.h.root, pickNew(e.n.cop ? 'hunt:cop' : 'hunt:civ', HUNT_LINES[e.n.cop ? 'cop' : 'civ']), 'loud', 2.6);
       } else if (e.type === 'caught' && !state.open && t > state.caughtCd && state.wanted > 0) {
         // 1 star = challan ka mauka; 2+ star = seedha BUSTED 🚔
         if (state.wanted >= 2) busted(); else openCaught();
@@ -2878,7 +2947,7 @@ function tick() {
       else if (e.type === 'punched') {
         state.hurtUntil = t + 0.45; state.stunUntil = t + 0.4;
         noise(0.1, 0.4, 900); flash('slap');
-        toast(fight('punched'), 1600);
+        ui3d.bubble(e.n.h.root, fightLine('punched'), 'loud', 2.6, null, { priority: true });
       }
     }
     // wanted dheere dheere kam

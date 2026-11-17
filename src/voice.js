@@ -116,11 +116,20 @@ function finish(tok) {
   const nx = waiting.shift();
   if (nx) start(nx.t, nx.opts);
 }
-async function sarvam(say, opts, tok) {
-  if (Date.now() < ttsDownUntil) return false;
+// aawaz ki file (cache / chal rahi request dobara nahi) — na bane to null
+const loading = new Map();
+function getAudio(say, opts) {
+  if (Date.now() < ttsDownUntil) return Promise.resolve(null);
   const key = `${opts.who || ''}|${opts.female ? 'f' : 'm'}|${say}`;
-  let url = audioCache.get(key);
-  if (!url) {
+  const hit = audioCache.get(key);
+  if (hit) return Promise.resolve(hit);
+  let p = loading.get(key);
+  if (!p) { p = fetchAudio(key, say, opts).finally(() => loading.delete(key)); loading.set(key, p); }
+  return p;
+}
+async function fetchAudio(key, say, opts) {
+  let url = null;
+  {
     const ctl = new AbortController();
     const tm = setTimeout(() => ctl.abort(), opts.priority ? 7000 : 4500);
     try {
@@ -131,13 +140,18 @@ async function sarvam(say, opts, tok) {
         const long = [402, 403, 404, 503].includes(r.status) || r.ok;
         if (long) ttsDownUntil = Date.now() + 30 * 60000;
         else if (r.status === 429 || r.status >= 500) ttsDownUntil = Date.now() + 20000;
-        return false;
+        return null;
       }
       url = URL.createObjectURL(await r.blob());
       audioCache.set(key, url);
       if (audioCache.size > 80) { const [k0, u0] = audioCache.entries().next().value; URL.revokeObjectURL(u0); audioCache.delete(k0); }
-    } catch { ttsDownUntil = Date.now() + 15000; return false; } finally { clearTimeout(tm); }
+    } catch { ttsDownUntil = Date.now() + 15000; return null; } finally { clearTimeout(tm); }
   }
+  return url;
+}
+async function sarvam(say, opts, tok) {
+  const url = await getAudio(say, opts);
+  if (!url) return false;
   if (tok !== curTok) return true; // beech mein koi aur bolne laga — ye chhod do
   const a = new Audio(url);
   a.volume = opts.vol ?? 1;
@@ -157,9 +171,15 @@ export function speak(text, opts = {}) {
   } else if (opts.queue && active?.prio) {
     waiting.push({ t, opts }); // pehle wala apni baat poori kare, phir ye
     if (waiting.length > 2) waiting.shift();
+    hindiOf(t, opts).then((hi) => getAudio(hi, opts)); // tab tak iski aawaz bana lo — baari aate hi turant bole
     return;
   } else stopAll();
   start(t, opts);
+}
+// Devanagari roop: yaad ho to wahi; quick=true (player ki apni line) → turant apna converter, Claude ka intezaar nahi
+async function hindiOf(t, opts) {
+  if (DEVA.test(t)) return t;
+  return deva.get(t) || (opts.quick ? romanToDeva(t) : (await fetchHindi(t, opts.priority ? 1500 : 2500)) || romanToDeva(t));
 }
 async function start(t, opts) {
   const tok = ++curTok;
@@ -167,8 +187,7 @@ async function start(t, opts) {
   clearTimeout(wd);
   wd = setTimeout(() => finish(tok), 9000 + t.length * 130); // kabhi atke nahi
   // Sarvam ko bhi Devanagari (desi uchchaaran) — sahi roop na ho to pehle Claude se, warna apna converter
-  let hi = DEVA.test(t) ? t : deva.get(t);
-  if (!hi) hi = (await fetchHindi(t, opts.priority ? 1500 : 2500)) || romanToDeva(t);
+  const hi = await hindiOf(t, opts);
   if (tok !== curTok) return;
   const ok = await sarvam(hi, opts, tok);
   if (!ok && tok === curTok) browserSpeak(t, hi, opts, tok);

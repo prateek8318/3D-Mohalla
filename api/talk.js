@@ -4,6 +4,8 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const client = new Anthropic(); // ANTHROPIC_API_KEY env se
 const MODEL = process.env.CLAUDE_MODEL || 'claude-opus-5-5';
+// refusal pe doosre model pe chalana (server-side fallback) — Haiku pe ye nahi hota, wahan mat bhejo
+const FB = /haiku/.test(MODEL) ? {} : { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' };
 
 const SYSTEM = `Tum ek 3D game "Mohalla 3D" ke kirdaaron ke dialogue likhte ho. Game 90s ke ek Indian mohalle (Bihar/UP jaisa) mein hai: chai ki tapri, rickshaw, bazaar, ghat, gunde, police, mohalle ki ladkiyan, dukaandaar.
 
@@ -39,8 +41,7 @@ async function toHindi(b, res) {
   const msg = await client.beta.messages.create({
     model: MODEL,
     max_tokens: 3000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
+    ...FB,
     output_config: { effort: 'low', format: { type: 'json_schema', schema: HINDI_SCHEMA } },
     system: 'Tum Roman Hinglish/Bhojpuri lines ko bilkul sahi Devanagari mein likhte ho, taaki Hindi bolne wali aawaz desi uchchaaran se padhe. Matlab ya shabd mat badlo, sirf lipi. English shabd bhi Devanagari mein (सॉरी, हीरो). Emoji hata do. Har input line ke liye ek output, usi kram mein.',
     messages: [{ role: 'user', content: JSON.stringify(list) }],
@@ -70,7 +71,7 @@ const CHAT_SYSTEM = `Tum "Mohalla 3D" game mein mohalle ki ek ladki ho (sab kird
 Kaise jawab do:
 - SABSE ZAROORI: jawab seedha us baat ka ho jo "Player ab bola" mein hai. Usne sawaal poochha (naam, kya kar rahi ho, kahan ja rahi, khaana khaya, kaisi ho…) to pehle USI sawaal ka asli jawab do, phir apni baat. Usne kuch bataya to usi pe react karo. Idhar-udhar ki ya ratti-rataayi line ("kya kaam hai", "jaldi bolo") tabhi jab baat se judi ho. Player ki baat ka koi shabd/vishay jawab mein jhalakna chahiye.
 - Mic ka text galat suna gaya lage ya samajh na aaye to andaaza mat lagao — ladki ki tarah poochh lo ("kya bola? phir se bolo na").
-- Bilkul asli UP/Bihar ki mohalle wali ladki jaisi — bol-chaal ki bhasha, apni personality (persona field) ke hisaab se. Jawab baat ke hisaab se: chhoti baat pe chhota, gehri ya lambi baat pe 2-3 vaakya (max ~280 characters). Har jawab naya — pichhle jawab ke shabd/andaaz mat dohraana, baat aage badhao, kabhi khud sawaal bhi poochho. lang="hi" → Roman Hinglish, lang="bho" → Roman Bhojpuri. Devanagari mat likhna. Zyada se zyada ek emoji.
+- Bilkul asli UP/Bihar ki mohalle wali ladki jaisi — bol-chaal ki bhasha, apni personality (persona field) ke hisaab se. Jawab CHHOTA: ek vaakya, zyada se zyada do chhote (max ~110 characters) — jaise asli baat-cheet mein log bolte hain, bhaashan nahi. Har jawab naya — pichhle jawab ke shabd/andaaz mat dohraana, baat aage badhao, kabhi khud sawaal bhi poochho. lang="hi" → Roman Hinglish, lang="bho" → Roman Bhojpuri. Devanagari mat likhna. Zyada se zyada ek emoji.
 - Player ke lehje ka jawab usi lehje mein:
   • pyaar/izzat se baat → pyaar se, dheere-dheere khulti hui
   • flirt/tareef → sharmaati, nakhre dikhati, muskuraati (affinity ke hisaab se kam ya zyada)
@@ -82,7 +83,8 @@ Kaise jawab do:
 - gf=true ho aur player gale lagne / kiss maange aur mood achha ho → action "hug" ya "kiss"; warna "none".
 - Baat bahut buri ho ya baar-baar pareshan kare → "walk_away" (chali jaati hai).
 - hindi: wahi jawab bilkul waise hi Devanagari mein (bolne wali aawaz ke liye), emoji nahi.
-- affinity: is baat se pasand kitni badli: -3 (bahut bura laga) se +3 (dil chhoo liya).
+- affinity: is baat se pasand kitni badli: -3 (bahut bura laga) se +3 (dil chhoo liya). Dil khol ke do: tameez, mazaak, sachchi tareef ya dhyaan se suni baat pe +2/+3; aam theek-thaak baat pe +1. 0 ya minus sirf tab jab baat sach mein rookhi/buri ho.
+- Pighalna aasaan rakho: ladka tameez se, dil se baat kare to 3-4 baaton mein khulne lago. Propose pe: affinity 0.45 se upar YA propose_chance 0.5 se upar ho aur usne badtameezi na ki ho → "accept". Bina wajah latkaana ya baar-baar nakhra nahi.
 - Kabhi bhi: jaati/dharm pe gaali nahi; koi sexual explicit baat nahi (pyaar, sharmaana, gale lagna, kiss tak theek). Player hinsa ki baat kare to daant ke mana karo.`;
 const CHAT_SCHEMA = {
   type: 'object',
@@ -129,8 +131,7 @@ async function sceneTalk(b, res) {
   const msg = await client.beta.messages.create({
     model: MODEL,
     max_tokens: 2000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
+    ...FB,
     output_config: { effort: 'low', format: { type: 'json_schema', schema: SCENE_SCHEMA } },
     system: [{ type: 'text', text: SCENE_SYSTEM, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content: ask }],
@@ -149,7 +150,7 @@ const NPC_SYSTEM = `Tum "Mohalla 3D" game (90s ka UP/Bihar ka mohalla) ke ek kir
 Kaise jawab do:
 - SABSE ZAROORI: jawab seedha us baat ka ho jo "Player ab bola" mein hai — sawaal ka asli jawab, baat pe asli reaction. Ratti-rataayi line nahi. Samajh na aaye to poochh lo "kya bola bhai? phir se bolo".
 - Apne kirdaar mein raho: dukaandaar ho to apne saaman/daam ("saaman" field) ki baat, mol-bhaav pe nakhra, udhaar pe mana, mohalle ki gossip; mission wala ho to kaam ki baat ("jaankari" field ke hisaab se, kaam/inaam mat badlo). Jo cheez tumhare paas nahi, saaf bol do nahi hai. Daam sirf wahi jo list mein hain — khud se chhoot ya naya saaman mat banao (khareedna neeche ke button se hota hai).
-- Bilkul asli bol-chaal, chhota (1-2 vaakya, max ~200 characters), har baar naya, pichhli baat (history) yaad rakho. lang="hi" → Roman Hinglish, lang="bho" → Roman Bhojpuri. Devanagari mat likhna. Zyada se zyada ek emoji.
+- Bilkul asli bol-chaal, CHHOTA (ek vaakya, max ~110 characters), har baar naya, pichhli baat (history) yaad rakho. lang="hi" → Roman Hinglish, lang="bho" → Roman Bhojpuri. Devanagari mat likhna. Zyada se zyada ek emoji.
 - Player ke lehje ke hisaab se: izzat → izzat, mazaak → mazaak, badtameezi → daant. spicy=true ho aur player gaali de to desi gaali waapas; spicy=false to bina gaali ke tikha jawab.
 - hindi: wahi jawab bilkul waise hi Devanagari mein (bolne wali aawaz ke liye), English shabd bhi Devanagari mein, emoji nahi.
 - Kabhi bhi: jaati/dharm pe gaali nahi, sexual baat nahi.`;
@@ -176,8 +177,7 @@ async function npcChat(b, res) {
   const msg = await client.beta.messages.create({
     model: MODEL,
     max_tokens: 1200,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
+    ...FB,
     output_config: { effort: 'low', format: { type: 'json_schema', schema: NPC_SCHEMA } },
     system: [{ type: 'text', text: NPC_SYSTEM, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content: ask }],
@@ -205,8 +205,7 @@ async function chat(b, res) {
   const msg = await client.beta.messages.create({
     model: MODEL,
     max_tokens: 1500,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
+    ...FB,
     output_config: { effort: 'low', format: { type: 'json_schema', schema: CHAT_SCHEMA } },
     system: [{ type: 'text', text: CHAT_SYSTEM, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content: ask }],
@@ -250,8 +249,7 @@ export default async function handler(req, res) {
     const msg = await client.beta.messages.create({
       model: MODEL,
       max_tokens: 1500,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default', // mana kare to API khud doosre model pe chala deta hai
+      ...FB, // mana kare to API khud doosre model pe chala deta hai
       output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEMA } },
       system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: ask }],

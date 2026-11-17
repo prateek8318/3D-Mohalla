@@ -11,6 +11,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^1.9.0",
     "firebase": "^11.10.0",
+    "sarvamai": "^1.1.19",
     "three": "^0.169.0"
   },
   "devDependencies": {

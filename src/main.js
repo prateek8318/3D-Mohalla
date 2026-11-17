@@ -18,9 +18,10 @@ import { createEyeLock } from './eyelock.js';
 import { buildNPCs } from './npcs.js';
 import { makeHuman, updateHuman, setAction, setOverlay, hold, itemMesh } from './humans.js';
 import { peopleLOD } from './people.js';
-import { speak, setVoice, voiceOn, voiceSupported, voiceInfo } from './voice.js';
-import { aiLine, aiFresh } from './ai.js';
+import { speak, setVoice, voiceOn, voiceSupported, voiceInfo, stopSpeaking } from './voice.js';
+import { aiLine, aiFresh, aiChat, aiAvailable } from './ai.js';
 import { playLoveTheme } from './lovetheme.js';
+import { EXTRA, mergeExtra } from './extralines.js';
 import { buildTraffic } from './traffic.js';
 import { buildHotel } from './hotel.js';
 import { buildMinimap } from './minimap.js';
@@ -67,6 +68,7 @@ function gaali(key) {
   return null;
 }
 const ui = (k) => gaali(k) || UI[L()][k];
+mergeExtra({ GIRL, FIGHT }); // 📚 purani lists mein nayi lines
 const fightOld = (k) => pv((state.level === 2 ? FIGHT18 : FIGHT)[L()][k] || FIGHT[L()][k] || FIGHT[L()].honk);
 // 🤖 AI se naye-naye jhagde ke dialogue (na mile to purane)
 const FIGHT_SIT = {
@@ -380,6 +382,7 @@ function dialog({ kind, avatar, title, sub, line, options, ai, female, voice }) 
   const tok = ++dlgTok;
   const talk = TALK_KINDS.has(kind);
   curVoice = voice || (talk ? { female: !!female, who: 'dlg:' + title } : null);
+  $('chatBar').classList.add('hidden'); chatGirl = null;
   $('shop').classList.toggle('talk', talk);
   $('shopAvatar').textContent = avatar;
   $('shopName').textContent = title;
@@ -1013,7 +1016,138 @@ function openGirl(n) {
   dialog({ kind: 'girl', avatar: g.gf ? '💞' : '👩', title: g.name, sub: g.gf ? 'Tumhari girlfriend' : `Mohalle ki ${g.name}`, line: g.slapped > 0 ? '…phir aa gaye? 😒' : aiLine(`girl:${g.name}:${L()}:${!!g.gf}`, { who: g.name, role: g.gf ? 'player ki girlfriend, mohalle ki ladki' : 'mohalle ki ladki, player ko thoda jaanti hai', situation: g.gf ? 'boyfriend mila, pyaar se baat' : 'player paas aa ke baat karna chahta hai, thoda nakhra/sharam/mazaak', lang: L(), spicy: false }, () => pick(GIRL[L()].hello)), options: opts, female: true });
   n.talking = true;
   state.talkGirl = n;
+  openChat(n);
 }
+// ---------- 💬 APNI BAAT — type karo ya mic se bolo, ladki Claude ban ke jawab deti hai ----------
+const PERSONAS = [
+  'sharmili, kam bolti, par dil ki saaf', 'chulbuli, mazaakiya, taane maarti rehti', 'tez-tarraar, muh-phat, kisi se nahi darti',
+  'padhaku, seedhi-saadi, izzat pasand', 'filmi, Shah Rukh ki fan, bahut romantic', 'nakhrewali, attitude wali, tareef pasand',
+];
+let chatGirl = null, rec = null;
+function proposeChance(n) {
+  const g = n.girl, t = state.t;
+  let score = 0.12 + g.affinity;
+  const gft = bestGift();
+  if (gft) score += gft.gift * 0.13;
+  if (t - state.haircutAt < 300) score += 0.12;
+  if (t < state.ittarUntil) score += 0.12;
+  if (me.spec.shades) score += 0.05;
+  if (t - state.styleAt < 600) score += 0.08;
+  score -= g.rejected * 0.12;
+  return Math.max(0, Math.min(1, score));
+}
+function openChat(n) {
+  chatGirl = n;
+  n.girl.persona ||= pick(PERSONAS);
+  n.girl.chat ||= [];
+  $('chatBar').classList.remove('hidden');
+  $('chatIn').value = '';
+  if (!isTouch) setTimeout(() => { if (chatGirl === n) $('chatIn').focus(); }, 80);
+}
+function becomeGf(n, gift) {
+  const g = n.girl;
+  for (const o of npcs.girls()) if (o.girl.gf && o !== n) o.girl.gf = false;
+  g.gf = true;
+  flash('love');
+  glide(800, 1600, 0.4, 'sine', 0.05);
+  toast(X().gfFollow(g.name) + (gift ? ` • 🎁 ${gift}` : ''), 3200);
+  state.romance = true;
+}
+// AI na mile to chhota sa apna jawab (gaali → gussa, tareef → sharm, propose → purana chance)
+const GAALI_RE = /bhosd|madarc|bhenc|chut|gaand|harami|kamin|kutt|saal[ie]|randi|lavd|lund|मादर|भोस|चूत|बहन\s?च|कुत्त|हरामी|कमीन/i;
+const SHY_LINES = ['Hatt… kuch bhi bolte ho 🙈', 'Aise mat dekho, sharam aati hai 😳', 'Baatein to badi badi karte ho 😏', 'Chup karo, koi sun lega 🙈', 'Tum bhi na… pagal ho 😊', 'Achha? Aur kya-kya pasand hai mujh mein? 😏', 'Mummy ko bata doon? 😜', 'Itni tareef… kuch chahiye kya? 🤭'];
+const LOVE_RE = /pyaar|pyar|love|dil|jaan|jaanu|sundar|khoobsurat|cute|beautiful|pasand|gf|girlfriend|shaadi|प्यार|दिल|जान|सुंदर|खूबसूरत|पसंद|शादी/i;
+function offlineReply(n, text, propose) {
+  const g = n.girl;
+  if (GAALI_RE.test(text)) return { reply: state.level === 2 ? pick(['Kya bola be? Muh tod dungi kamine! 😡', 'Tameez se baat kar, chutiye! 😤']) : pick(['Tameez naam ki cheez hai ki nahi? 😡', 'Zabaan sambhaal ke baat karo! 😤']), mood: 'angry', affinity: -3, action: g.slapped > 0 || Math.random() < 0.6 ? 'slap' : 'walk_away' };
+  if (propose) return Math.random() < proposeChance(n) ? { reply: girlLine('yes'), mood: 'love', affinity: 2, action: 'accept' } : { reply: girlLine('no'), mood: 'annoyed', affinity: -1, action: 'reject' };
+  if (LOVE_RE.test(text)) return { reply: g.gf ? pick(EXTRA[L()].girlAlready) : pick(SHY_LINES), mood: 'shy', affinity: 1, action: 'none' };
+  if (/\?$|kya|kaise|kahan|kab|kaun|क्या|कैसे/i.test(text)) return { reply: pick(['Pata nahi, tum batao 🤔', 'Ye bhi koi poochhne ki baat hai? 😄', 'Hmm… sochna padega', 'Tumhe kya lagta hai?', 'Kal bataungi, abhi jaldi mein hoon']), mood: 'neutral', affinity: 0, action: 'none' };
+  return { reply: pick(GIRL[L()].hello), mood: 'neutral', affinity: 0, action: 'none' };
+}
+async function girlChat(n, text, { propose: prop = false } = {}) {
+  const g = n.girl;
+  text = String(text || '').trim();
+  if (!text || g.chatBusy) return;
+  g.chatBusy = true;
+  g.persona ||= pick(PERSONAS);
+  g.chat ||= [];
+  ui3d.bubble(me.root, text, prop ? 'love' : '', bubDur(text), false);
+  g.chat.push({ who: 'player', text });
+  const open = () => state.open === 'girl' && chatGirl === n;
+  if (open()) { $('shopSay').textContent = '…'; $('shopSay').classList.add('typing'); $('chatBar').classList.add('busy'); }
+  const gft = bestGift();
+  const hr = Math.floor(state.tod * 24);
+  const where = `${hr}:00 baje, ${Math.hypot(walker.pos.x, walker.pos.z + 110) < 25 ? 'Prem Ghat' : 'mohalle ki gali'}`;
+  const res = await aiChat({
+    persona: { name: g.name, persona: g.persona, gf: g.gf, affinity: g.affinity, rejected: g.rejected, slapped: g.slapped, chance: proposeChance(n), gift: gft?.n || '', where },
+    history: g.chat.slice(-12, -1), text, lang: L(), spicy: state.level === 2,
+  });
+  const r = res || offlineReply(n, text, prop);
+  g.chatBusy = false;
+  g.chat.push({ who: 'girl', text: r.reply });
+  if (g.chat.length > 30) g.chat.splice(0, g.chat.length - 30);
+  g.affinity = Math.max(-0.5, Math.min(1.5, g.affinity + (Number(r.affinity) || 0) * 0.07));
+  const cls = r.mood === 'angry' || r.mood === 'annoyed' ? 'loud' : r.mood === 'love' || r.mood === 'shy' || r.mood === 'flirty' ? 'love' : '';
+  if (open()) {
+    $('shopSay').classList.remove('typing'); $('chatBar').classList.remove('busy');
+    typeLine(r.reply); // dialog mein likha + ladki ki aawaz
+    ui3d.bubble(n.h.root, r.reply, cls, bubDur(r.reply), false);
+    if (!isTouch) $('chatIn').focus();
+  } else ui3d.bubble(n.h.root, r.reply, cls, bubDur(r.reply), n.h.root);
+  if (!g.gf) { n.pause = 6; n.pauseAct = r.mood === 'angry' ? 'point' : 'talk'; n.faceTo = { x: walker.pos.x, z: walker.pos.z }; }
+  if (r.affinity) toast(`${r.affinity > 0 ? '💗' : '💔'} ${g.name}: ${r.affinity > 0 ? '+' : ''}${r.affinity} pasand`, 1400);
+  // ladki ka faisla 👇
+  const gift = prop && gft ? gft : null;
+  switch (r.action) {
+    case 'slap': setTimeout(() => slap(n), 1100); break;
+    case 'accept':
+      if (!g.gf) { if (gift) { takeFromBag(gift); handOver(n, gift.mesh, 500); } becomeGf(n, gift?.n); setTimeout(() => { if (state.open === 'girl' && chatGirl === n) openGirl(n); }, 2200); }
+      break;
+    case 'reject': g.rejected++; if (gift) { takeFromBag(gift); handOver(n, gift.mesh, 500); } break;
+    case 'hug': if (g.gf) setTimeout(() => runScene(hugScene(n)), 1600); break;
+    case 'kiss': if (g.gf) setTimeout(() => runScene(kissScene(n)), 1600); break;
+    case 'walk_away': setTimeout(() => { if (chatGirl === n) closeSheets(); n.talking = false; n.pause = 0; if (!g.gf) n.backToLane = true; }, 1800); break;
+    default: break;
+  }
+}
+function sendChat() {
+  const n = chatGirl;
+  if (!n) return;
+  const v = $('chatIn').value;
+  $('chatIn').value = '';
+  girlChat(n, v);
+}
+$('chatSend').onclick = sendChat;
+$('chatIn').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); sendChat(); } if (e.key === 'Escape') closeSheets(); });
+// 🎤 mic se bolo (Chrome/Edge; Hindi samajhta hai)
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SR) $('chatMic').style.display = 'none';
+$('chatMic').onclick = () => {
+  if (rec) { rec.stop(); return; }
+  stopSpeaking(); // apni hi aawaz na sun le
+  rec = new SR();
+  rec.lang = 'hi-IN';
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+  $('chatMic').classList.add('on');
+  $('chatIn').placeholder = '🎤 Bolo… sun rahi hoon';
+  let finalText = '';
+  rec.onresult = (e) => {
+    let txt = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) { txt += e.results[i][0].transcript; if (e.results[i].isFinal) finalText += e.results[i][0].transcript; }
+    $('chatIn').value = finalText || txt;
+  };
+  rec.onerror = (e) => { if (e.error === 'not-allowed') toast('🎤 Mic ki permission do (browser ke address bar se)', 2600); };
+  rec.onend = () => {
+    $('chatMic').classList.remove('on');
+    $('chatIn').placeholder = 'Kuch bhi bolo… type karo ya 🎤 dabao';
+    rec = null;
+    if ($('chatIn').value.trim()) sendChat();
+  };
+  try { rec.start(); } catch { rec = null; $('chatMic').classList.remove('on'); }
+};
+
 function giveGift(n) {
   const gft = bestGift();
   if (!gft) return say(GIRL[L()].noGift, '🌹 Bazaar gali mein Phool wala / Chudi bhandar');
@@ -1025,6 +1159,10 @@ function giveGift(n) {
   setTimeout(() => girlReact(n, pick(GIRL[L()].gift), { cls: 'love', sub: `💗 ${n.girl.name} ko ${gft.n} pasand aaya (+pasand)` }), 1200);
 }
 function propose(n) {
+  if (aiAvailable()) return girlChat(n, '🌹 Kya tum meri girlfriend banogi?', { propose: true });
+  proposeLocal(n);
+}
+function proposeLocal(n) {
   const g = n.girl, t = state.t;
   closeSheets();
   meSay('🌹 Kya tum meri girlfriend banogi?', 'love');
@@ -1441,8 +1579,9 @@ function ambientTalk(t) {
     : state.mode === 'drive' ? 'paas mein gaadi khadi hai, uske driver ko dekh ke kuch bolna (sawari, kiraya, mazaak)'
       : pick(['mohalle ki gossip apne aap se ya saath wale se', `${when} ka mausam/mehngai/bijli-paani pe shikayat`, 'player ko dekh ke taana ya mazaak', 'ghar ki koi baat (biwi/maa/bachche/rishtedaar)', 'cricket, film ya neta pe raay']);
   const line = aiLine(`amb:${fem ? 'f' : 'm'}:${fast ? 'fast' : state.mode}:${L()}:${state.level}`, { who: fem ? 'mohalle ki aurat' : 'mohalle ka aadmi', role: fem ? 'aam gharelu aurat / ladki' : 'aam aadmi (dukaan, naukri, bekaar ghoomne wala)', situation: `${when} ka waqt. ${sit}`, lang: L(), spicy: state.level === 2 }, null);
-  if (!line) return; // AI pool khaali → chup (purani lines baar-baar na dohraayein)
-  ui3d.bubble(n.h.root, line, fast ? 'loud' : '', 3.2, n.h.root);
+  const say = line || (fast ? null : pick(EXTRA[L()][fem ? 'ambF' : 'ambM'])); // AI na ho to bade bhandaar se (dohraav nahi)
+  if (!say) return;
+  ui3d.bubble(n.h.root, say, fast ? 'loud' : '', 3.2, n.h.root);
 }
 
 // ---------- KAAM-DHANDA 💼 ----------

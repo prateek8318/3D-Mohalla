@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { makeHuman, updateHuman, setAction, hold, itemMesh } from './humans.js';
 
 const R = Math.random;
-const pick = (a) => a[Math.floor(R() * a.length)];
+import { pick } from './data.js';
+import { EXTRA } from './extralines.js';
 const headingTo = (dx, dz) => Math.atan2(-dx, -dz);
 
 const L = {
@@ -81,6 +82,9 @@ const VEH_TXT = {
     raceStart: ['🏁 Street race! Checkpoint se checkpoint — time pe pahuncha!', '🏎️ Shahar ke lafanga race lagawat baade — dekha da asli driver ke ba!'],
   },
 };
+
+// 📚 sawari ki zyada lines (AI na chale tab bhi variety)
+for (const lg of ['hi', 'bho']) for (const k of ['paxChat', 'paxBoard', 'paxThanks']) for (const l of EXTRA[lg][k]) if (!L[lg][k].includes(l)) L[lg][k].push(l);
 
 export function createMissions(ctx) {
   const { scene, npcs } = ctx;

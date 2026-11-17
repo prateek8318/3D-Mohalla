@@ -8,7 +8,7 @@ const MODEL = process.env.CLAUDE_MODEL || 'claude-opus-5-5';
 const SYSTEM = `Tum ek 3D game "Mohalla 3D" ke kirdaaron ke dialogue likhte ho. Game 90s ke ek Indian mohalle (Bihar/UP jaisa) mein hai: chai ki tapri, rickshaw, bazaar, ghat, gunde, police, mohalle ki ladkiyan, dukaandaar.
 
 Niyam:
-- Har line bilkul asli zindagi jaisi — jaise sach mein UP/Bihar ke mohalle mein log bolte hain: bol-chaal ki bhasha, adhoore vaakya, "arre", "abe", "haan bhai", taane, mazaak, gussa, apni pareshaani. Kitaabi ya filmi-dialogue jaisa nahi. Chhoti (max ~110 characters), ek hi baat.
+- Har line bilkul asli zindagi jaisi — jaise sach mein UP/Bihar ke mohalle mein log bolte hain: bol-chaal ki bhasha, adhoore vaakya, "arre", "abe", "haan bhai", taane, mazaak, gussa, apni pareshaani. Kitaabi ya filmi-dialogue jaisa nahi. Chhoti (max ~130 characters), ek hi baat. Har baar naya — alag shabd, alag mazaak, alag shuruaat; "pehle bol chuke" wali lines ya unke jaisi bilkul mat likhna.
 - Kirdaar ke mood ke hisaab se: gusse wala sach mein bhadka hua lage, sharmila sharmaaye, dukaandaar dhandhe ki baat kare.
 - Bhasha: lang="hi" ho to Roman Hinglish (jaise "Arre bhaiya, chai thandi ho gayi!"); lang="bho" ho to Roman Bhojpuri (jaise "Ae babua, ka haal ba?"). Devanagari mat likhna.
 - Har line alag ho — alag mood, alag baat, alag shuruaat. Ek-doosre ko copy mat karo.
@@ -17,14 +17,40 @@ Niyam:
 - spicy=true (game ka 18+ "bakchodi" mode, player ne khud chuna hai): gussa/jhagda/taana ho to asli sadak jaisi desi gaali khul ke (bhenchod, madarchod, bhosdike, chutiya, saala, kamina, gadha…), jaise log sach mein dete hain. Har line mein zabardasti nahi — jahan mood ho wahin.
 - spicy=false: gaali nahi; gussa "abe", "andhe ho kya", "dimaag kharab hai kya" jaisa.
 - Kabhi bhi: jaati, dharm, kshetra pe gaali/nafrat nahi; aurat ke khilaaf sexual ya hinsak baat nahi; bachchon ke baare mein galat nahi.
-- Sirf dialogue lines do, koi explanation nahi.`;
+- Sirf dialogue lines do, koi explanation nahi.
+- Har line ke saath "hindi": wahi line bilkul waise hi Devanagari mein (bolne wali aawaz ke liye) — English shabd bhi Devanagari mein (जैसे सॉरी, हीरो, ट्रेन), emoji nahi.`;
 
 const SCHEMA = {
   type: 'object',
-  properties: { lines: { type: 'array', items: { type: 'string' } } },
+  properties: {
+    lines: {
+      type: 'array',
+      items: { type: 'object', properties: { text: { type: 'string' }, hindi: { type: 'string' } }, required: ['text', 'hindi'], additionalProperties: false },
+    },
+  },
   required: ['lines'],
   additionalProperties: false,
 };
+// 🔤 pehle se likhi Roman lines → Devanagari (sirf bolne ke liye)
+const HINDI_SCHEMA = { type: 'object', properties: { hindi: { type: 'array', items: { type: 'string' } } }, required: ['hindi'], additionalProperties: false };
+async function toHindi(b, res) {
+  const list = (Array.isArray(b.list) ? b.list : []).slice(0, 12).map((t) => str(t, 300));
+  if (!list.length) return res.status(200).json({ hindi: [] });
+  const msg = await client.beta.messages.create({
+    model: MODEL,
+    max_tokens: 3000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low', format: { type: 'json_schema', schema: HINDI_SCHEMA } },
+    system: 'Tum Roman Hinglish/Bhojpuri lines ko bilkul sahi Devanagari mein likhte ho, taaki Hindi bolne wali aawaz desi uchchaaran se padhe. Matlab ya shabd mat badlo, sirf lipi. English shabd bhi Devanagari mein (सॉरी, हीरो). Emoji hata do. Har input line ke liye ek output, usi kram mein.',
+    messages: [{ role: 'user', content: JSON.stringify(list) }],
+  });
+  const text = msg.content.find((c) => c.type === 'text')?.text || '{}';
+  let out = [];
+  try { out = JSON.parse(text).hindi || []; } catch { out = []; }
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(200).json({ hindi: out.slice(0, list.length).map((t) => str(t, 400)) });
+}
 
 // 🚦 sasta rate-limit (har warm instance mein) — ek IP se ek minute mein 20 se zyada nahi
 const hits = new Map();
@@ -34,9 +60,69 @@ function limited(ip) {
   arr.push(now);
   hits.set(ip, arr);
   if (hits.size > 5000) hits.clear();
-  return arr.length > 20;
+  return arr.length > 60;
 }
 const str = (v, n) => String(v ?? '').slice(0, n);
+
+// 💬 CHAT mode: player khud likhta/bolta hai, mohalle ki ladki Claude ban ke jawab deti hai
+const CHAT_SYSTEM = `Tum "Mohalla 3D" game mein mohalle ki ek ladki ho (sab kirdaar 18+ baalig hain). Player (mohalle ka ladka) tumse seedhe baat kar raha hai — type karke ya mic se bol ke (mic wala text Devanagari ya tooti-phooti Hinglish ho sakta hai, samajh lena).
+
+Kaise jawab do:
+- Bilkul asli UP/Bihar ki mohalle wali ladki jaisi — bol-chaal ki bhasha, apni personality (persona field) ke hisaab se. Jawab baat ke hisaab se: chhoti baat pe chhota, gehri ya lambi baat pe 2-3 vaakya (max ~280 characters). Har jawab naya — pichhle jawab ke shabd/andaaz mat dohraana, baat aage badhao, kabhi khud sawaal bhi poochho. lang="hi" → Roman Hinglish, lang="bho" → Roman Bhojpuri. Devanagari mat likhna. Zyada se zyada ek emoji.
+- Player ke lehje ka jawab usi lehje mein:
+  • pyaar/izzat se baat → pyaar se, dheere-dheere khulti hui
+  • flirt/tareef → sharmaati, nakhre dikhati, muskuraati (affinity ke hisaab se kam ya zyada)
+  • bakwaas/chhedkhaani/gande comment → gussa, daant, chappal ki dhamki; zyada ho to thappad (action "slap")
+  • gaali → gaali ka jawab: spicy=true ho to usi tarah desi gaali waapas (bhosdike, chutiye, kamine, saale…) + thappad; spicy=false ho to bina gaali ke tikha jawab
+  • mazaak → mazaak
+- Yaad rakho pichhli baatein (history). affinity (0 = ajnabi, 1+ = bahut pasand) aur gf=true (pehle se girlfriend) ke hisaab se kitni khuli ho.
+- Propose / "girlfriend banogi" / "shaadi karogi" jaisa sawaal ho → soch ke faisla: affinity, propose_chance (0-1), gift, aur player ne ab tak kaise baat ki. Haan ho to action "accept", na ho to "reject" (achhe se ya gusse se, baat ke hisaab se).
+- gf=true ho aur player gale lagne / kiss maange aur mood achha ho → action "hug" ya "kiss"; warna "none".
+- Baat bahut buri ho ya baar-baar pareshan kare → "walk_away" (chali jaati hai).
+- hindi: wahi jawab bilkul waise hi Devanagari mein (bolne wali aawaz ke liye), emoji nahi.
+- affinity: is baat se pasand kitni badli: -3 (bahut bura laga) se +3 (dil chhoo liya).
+- Kabhi bhi: jaati/dharm pe gaali nahi; koi sexual explicit baat nahi (pyaar, sharmaana, gale lagna, kiss tak theek). Player hinsa ki baat kare to daant ke mana karo.`;
+const CHAT_SCHEMA = {
+  type: 'object',
+  properties: {
+    reply: { type: 'string' },
+    hindi: { type: 'string' },
+    mood: { type: 'string', enum: ['shy', 'happy', 'love', 'flirty', 'neutral', 'annoyed', 'angry', 'sad'] },
+    affinity: { type: 'integer', enum: [-3, -2, -1, 0, 1, 2, 3] },
+    action: { type: 'string', enum: ['none', 'slap', 'accept', 'reject', 'hug', 'kiss', 'walk_away'] },
+  },
+  required: ['reply', 'hindi', 'mood', 'affinity', 'action'],
+  additionalProperties: false,
+};
+
+async function chat(b, res) {
+  const p = b.persona || {};
+  const hist = (Array.isArray(b.history) ? b.history : []).slice(-12)
+    .map((h) => `${h.who === 'girl' ? str(p.name, 30) || 'Ladki' : 'Player'}: ${str(h.text, 300)}`).join('\n');
+  const ask = [
+    `naam: ${str(p.name, 30)} | persona: ${str(p.persona, 120)} | gf=${!!p.gf} | affinity=${Number(p.affinity || 0).toFixed(2)} | pehle mana kiya: ${Number(p.rejected) || 0} baar | thappad khaya: ${Number(p.slapped) || 0} baar`,
+    `propose_chance=${Number(p.chance || 0).toFixed(2)} | gift haath mein: ${str(p.gift, 40) || 'nahi'} | jagah/samay: ${str(p.where, 80)}`,
+    `lang=${b.lang === 'bho' ? 'bho' : 'hi'} spicy=${b.spicy ? 'true' : 'false'}`,
+    hist ? `Ab tak ki baat:\n${hist}` : 'Abhi baat shuru hui hai.',
+    `Player ab bola: "${str(b.text, 400)}"`,
+  ].join('\n');
+  const msg = await client.beta.messages.create({
+    model: MODEL,
+    max_tokens: 1500,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low', format: { type: 'json_schema', schema: CHAT_SCHEMA } },
+    system: [{ type: 'text', text: CHAT_SYSTEM, cache_control: { type: 'ephemeral' } }],
+    messages: [{ role: 'user', content: ask }],
+  });
+  if (msg.stop_reason === 'refusal') return res.status(200).json({ reply: 'Ye kaisi baat kar rahe ho? Jao yahan se 😒', mood: 'annoyed', affinity: -1, action: 'none' });
+  const text = msg.content.find((c) => c.type === 'text')?.text || '{}';
+  let out;
+  try { out = JSON.parse(text); } catch { out = null; }
+  if (!out?.reply) return res.status(502).json({ error: 'AI ka jawab samajh nahi aaya' });
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(200).json({ reply: str(out.reply, 400), hindi: str(out.hindi, 800), mood: out.mood, affinity: out.affinity, action: out.action });
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
@@ -45,13 +131,22 @@ export default async function handler(req, res) {
   if (limited(ip)) return res.status(429).json({ error: 'thoda ruko' });
 
   const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
-  const n = Math.max(1, Math.min(8, Number(b.n) || 4));
+  if (b.mode === 'chat' || b.mode === 'hindi') {
+    try { return await (b.mode === 'chat' ? chat(b, res) : toHindi(b, res)); } catch (e) {
+      if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ error: 'AI busy' });
+      if (e instanceof Anthropic.APIError) return res.status(502).json({ error: `AI error ${e.status}` });
+      return res.status(500).json({ error: 'server error' });
+    }
+  }
+  const n = Math.max(1, Math.min(10, Number(b.n) || 4));
+  const avoid = (Array.isArray(b.avoid) ? b.avoid : []).slice(-15).map((t) => str(t, 160));
   const ask = [
     `kirdaar: ${str(b.who, 60)}`,
     `kaun/kaam: ${str(b.role, 120)}`,
     `situation: ${str(b.situation, 400)}`,
     b.base ? `asli line (isi matlab ko naye andaaz mein kaho): ${str(b.base, 300)}` : '',
     `lang=${b.lang === 'bho' ? 'bho' : 'hi'} spicy=${b.spicy ? 'true' : 'false'}`,
+    avoid.length ? `pehle bol chuke (inse alag likho, inka matlab bhi mat dohrao):\n- ${avoid.join('\n- ')}` : '',
     `${n} alag-alag lines do.`,
   ].filter(Boolean).join('\n');
 
@@ -69,7 +164,7 @@ export default async function handler(req, res) {
     const text = msg.content.find((c) => c.type === 'text')?.text || '{}';
     let lines = [];
     try { lines = JSON.parse(text).lines || []; } catch { lines = []; }
-    lines = lines.map((l) => str(l, 160).trim()).filter(Boolean).slice(0, n);
+    lines = lines.map((l) => (typeof l === 'string' ? { text: l, hindi: '' } : { text: str(l?.text, 200).trim(), hindi: str(l?.hindi, 400).trim() })).filter((l) => l.text).slice(0, n);
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({ lines });
   } catch (e) {

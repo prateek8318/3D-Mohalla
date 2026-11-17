@@ -21,7 +21,7 @@ export function createUI3D(camera) {
     if (bubbles.length > 7) bubbles[0].until = 0;
     // 🗣️ paas wala bole to aawaz bhi (door wale chup — warna shor)
     const wp = target.isObject3D ? target.getWorldPosition(new THREE.Vector3()) : target;
-    if (wp && Math.hypot(wp.x - camera.position.x, (wp.z ?? 0) - camera.position.z) < 28) {
+    if (speaker !== false && wp && Math.hypot(wp.x - camera.position.x, (wp.z ?? 0) - camera.position.z) < 28) { // speaker=false → chup (jaise player ka apna likha)
       const sp = speaker || target;
       const ud = sp.isObject3D ? (sp.userData.female !== undefined ? sp.userData : sp.children.find((c) => c.userData?.female !== undefined)?.userData) : null;
       speak(text, { female: !!ud?.female, who: sp.uuid || sp.who, loud: /loud/.test(cls) });

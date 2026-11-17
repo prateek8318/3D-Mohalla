@@ -496,3 +496,14 @@ body.dead #c { filter: grayscale(1) brightness(.75) contrast(1.1); transition: f
 #shop.talk .opt .rt::after { font-size: 11px; }
 #shop.talk .opt .ic { width: 32px; height: 32px; font-size: 16px; }
 @media (hover: none) { #shop.talk .opt .rt::after { display: none; } }
+
+/* 💬 apni baat likho / bolo */
+.chatbar { display: flex; gap: 8px; margin: 0 0 12px; }
+.chatbar.hidden { display: none; }
+.chatbar input { flex: 1; min-width: 0; padding: 11px 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06); color: #fff; font: 500 15px var(--ui); outline: none; }
+.chatbar input:focus { border-color: rgba(255, 61, 127, .6); background: rgba(255,255,255,.09); }
+.chatbar button { width: 44px; border-radius: 14px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.08); color: #fff; font-size: 18px; cursor: pointer; }
+.chatbar button:hover { background: rgba(255, 61, 127, .3); }
+.chatbar #chatMic.on { background: #ff3d5a; border-color: #ff3d5a; animation: micPulse 1s infinite; }
+@keyframes micPulse { 50% { box-shadow: 0 0 0 8px rgba(255, 61, 90, .25); } }
+.chatbar.busy { opacity: .6; pointer-events: none; }

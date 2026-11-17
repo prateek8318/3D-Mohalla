@@ -371,4 +371,18 @@ export const UI = {
   },
 };
 
-export const pick = (a) => a[Math.floor(Math.random() * a.length)];
+// 🃏 taash ki gaddi jaisa: list ki har line ek-ek baar, phir naye sire se phent ke — wahi line baar-baar nahi
+const _bags = new WeakMap();
+export const pick = (a) => {
+  if (!Array.isArray(a) || a.length < 3) return a[Math.floor(Math.random() * a.length)];
+  let b = _bags.get(a);
+  if (!b || !b.left.length || b.n !== a.length) {
+    const left = [...a.keys()];
+    for (let i = left.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [left[i], left[j]] = [left[j], left[i]]; }
+    if (b && left[left.length - 1] === b.last && left.length > 1) [left[0], left[left.length - 1]] = [left[left.length - 1], left[0]];
+    b = { left, n: a.length, last: b?.last };
+    _bags.set(a, b);
+  }
+  b.last = b.left.pop();
+  return a[b.last];
+};

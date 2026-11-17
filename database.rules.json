@@ -1,0 +1,24 @@
+{
+  "rules": {
+    "saves": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['money', 'at']) && newData.child('money').isNumber() && newData.child('money').val() >= 0 && newData.child('money').val() <= 5000000"
+      }
+    },
+    "leaderboard": {
+      ".read": true,
+      ".indexOn": ["money", "respect"],
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name', 'money', 'respect', 'at'])",
+        "name": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24" },
+        "money": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5000000" },
+        "respect": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000" },
+        "at": { ".validate": "newData.isNumber() && newData.val() <= now" },
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}

@@ -25,6 +25,7 @@ import { createMissions } from './missions.js';
 import { buildHighway } from './highway.js';
 import { createWeapons, GUNS } from './weapons.js';
 import { createStory } from './story.js';
+import { cloud } from './cloud.js';
 import { ROOF, LIFT } from './hotel.js';
 import { makeEnv, computeEnv, clockLabel, phase, RetroShader, HOUR_SECONDS } from './daytime.js';
 import { GHAT, SHAYARI, UI, WISHES, CALLS, GENERIC, KISS_LINES, PHASES, pick } from './data.js';
@@ -383,6 +384,17 @@ function openPlaces() {
   sv.textContent = '💾 Save / Load (progress)';
   sv.onclick = () => openSaveMenu();
   list.appendChild(sv);
+  const cb = document.createElement('div');
+  cb.className = 'items';
+  cb.style.marginBottom = '10px';
+  for (const [txt, fn] of [['🏆 Leaderboard', () => openLeaderboard()], [cloud.user && !cloud.user.isAnonymous ? `☁️ ${cloud.name()}` : '🔐 Login / Account', () => openAccount()]]) {
+    const b = document.createElement('button');
+    b.className = 'item good';
+    b.textContent = txt;
+    b.onclick = fn;
+    cb.appendChild(b);
+  }
+  list.appendChild(cb);
   const tb = document.createElement('div');
   tb.className = 'items';
   tb.style.marginBottom = '12px';
@@ -1329,8 +1341,86 @@ function saveGame(manual = false) {
     cineFx: state.cineFx, at: Date.now(),
   };
   try { localStorage.setItem('mohalla.save', JSON.stringify(data)); localStorage.setItem('mohalla.respect', String(data.respect)); } catch { /* ok */ }
-  if (manual) toast(MISC3[L()].saved, 1500);
+  if (manual) toast(MISC3[L()].saved + (cloud.user ? ' ☁️' : ''), 1500);
+  cloudPush(data, manual);
   return data;
+}
+// ---------- ☁️ CLOUD (Firebase) ----------
+let lastCloudPush = 0, cloudSynced = false;
+function cloudPush(data, now = false) {
+  if (!cloud.user || !cloudSynced) return;
+  const t = performance.now();
+  if (!now && t - lastCloudPush < 20000) return;
+  lastCloudPush = t;
+  cloud.save(data).catch((e) => console.warn('cloud save fail', e));
+}
+function readLocalSave() { try { return JSON.parse(localStorage.getItem('mohalla.save') || 'null'); } catch { return null; } }
+// login hote hi: cloud wala naya ho to wo lo, warna local wala upload karo
+async function cloudSync() {
+  cloudSynced = false;
+  let remote = null;
+  try { remote = await cloud.loadSave(); } catch (e) { console.warn('cloud load fail', e); setCloudStatus('⚠️ Cloud se judne mein dikkat — offline khel rahe ho'); return; }
+  const local = readLocalSave();
+  if (remote && (!local || (remote.at || 0) > (local.at || 0) + 2000)) {
+    try {
+      localStorage.setItem('mohalla.save', JSON.stringify(remote));
+      localStorage.setItem('mohalla.respect', String(remote.respect || 0));
+      localStorage.setItem('mohalla.money', String(remote.money || 0));
+    } catch { /* ok */ }
+    if (!started || confirm('☁️ Cloud pe naya progress mila (₹' + remote.money + '). Load karein? Game reload hoga.')) { location.reload(); return; }
+  }
+  cloudSynced = true;
+  const d = started ? saveGame() : local;
+  if (d) cloudPush(d, true);
+  setCloudStatus();
+}
+function setCloudStatus(msg) {
+  const el = $('cloudStatus');
+  if (!el) return;
+  const u = cloud.user;
+  el.textContent = msg || (u ? (u.isAnonymous ? `👤 ${cloud.name()} (guest) • ☁️ save chalu` : `✅ ${cloud.name()} • ☁️ cloud save chalu`) : '☁️ Login karo — progress kabhi nahi khoyega');
+  const g = $('btnGoogle');
+  if (g) g.classList.toggle('hidden', !!(u && !u.isAnonymous));
+}
+async function googleLogin() {
+  try {
+    setCloudStatus('⏳ Google login…');
+    await cloud.loginGoogle();
+  } catch (e) {
+    console.warn(e);
+    setCloudStatus(e.code === 'auth/unauthorized-domain' ? '⚠️ Ye domain Firebase mein authorized nahi hai' : e.code === 'auth/popup-closed-by-user' ? undefined : '⚠️ Login nahi hua: ' + (e.code || e.message));
+    if (started) toast('⚠️ Login nahi hua', 2000);
+  }
+}
+async function openLeaderboard(by = 'money') {
+  dialog({ kind: 'lb', avatar: '🏆', title: 'Mohalla Leaderboard', sub: by === 'money' ? 'Sabse amir 💰' : 'Sabse izzatdaar 🏅', line: '⏳ Load ho raha hai…', options: [] });
+  let rows;
+  try { rows = await cloud.top(by, 10); } catch (e) { if (state.open === 'lb') say('⚠️ Leaderboard load nahi hua — net check karo'); return; }
+  if (state.open !== 'lb') return;
+  const me_ = cloud.user?.uid, medal = ['🥇', '🥈', '🥉'];
+  const opts = [
+    { n: by === 'money' ? '🏅 Respect wali list dekho' : '💰 Paise wali list dekho', cls: 'good', on: () => openLeaderboard(by === 'money' ? 'respect' : 'money') },
+    ...rows.map((r, i) => ({
+      n: `${medal[i] || '#' + (i + 1)} ${r.name}${r.uid === me_ ? ' (tum)' : ''}`,
+      d: by === 'money' ? `₹${r.money} • 🏅 ${r.respect}` : `🏅 ${r.respect} • ₹${r.money}`,
+      cls: r.uid === me_ ? 'good' : '',
+      on: () => {},
+    })),
+  ];
+  say(rows.length ? (cloud.user ? 'Top 10 — tumhara naam bhi chamkega! 😎' : 'Login karo to tumhara naam bhi aayega!') : 'Abhi koi nahi — pehle tum aa jao! 🚀');
+  renderOptions(opts);
+}
+function openAccount() {
+  const u = cloud.user;
+  dialog({
+    kind: 'acct', avatar: '☁️', title: 'Account', sub: u ? (u.isAnonymous ? `Guest: ${cloud.name()}` : `${u.displayName || ''} • ${u.email || ''}`) : 'Login nahi hai',
+    line: u && !u.isAnonymous ? 'Progress cloud pe save ho raha hai. Kisi bhi phone pe isi Google se login karo.' : 'Google se login karo — phone badlo ya browser saaf karo, progress wahi milega.',
+    options: [
+      ...(!u || u.isAnonymous ? [{ n: '🔐 Google se login', cls: 'good', on: () => { closeSheets(); googleLogin(); } }] : []),
+      { n: '☁️ Abhi cloud pe save karo', on: () => { saveGame(true); } },
+      ...(u && !u.isAnonymous ? [{ n: '🚪 Logout', cls: 'danger', on: async () => { saveGame(true); await cloud.logout(); closeSheets(); toast('Logout ho gaya — ab guest ho', 2000); cloud.loginGuest().catch(() => {}); } }] : []),
+    ],
+  });
 }
 function loadGame(raw) {
   try {
@@ -1361,7 +1451,7 @@ function openSaveMenu() {
     ],
   });
 }
-document.addEventListener('visibilitychange', () => { if (document.hidden && started) saveGame(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && started) { const d = saveGame(); cloudPush(d, true); } });
 
 // ---------- MAAR-PEET 👊 / KOOD ----------
 function attack() {
@@ -1949,6 +2039,17 @@ async function boot() {
   $('btnRetro').textContent = '🎬';
   if (location.search.includes('debug')) window.__m = { state, npcs, walker, get car() { return car; }, openGirl, toggleRide, teleport, openShop, world, interact, get traffic() { return traffic; }, attack, jump, openMusic, music, musicUI, get missions() { return missions; }, get ui3d() { return ui3d; }, get weapons() { return weapons; }, get story() { return story; }, toggleLift, startAim, stopAim, shoot, setAim: (y, p) => { aimYaw = y; aimPitch = p; }, buy: (id, n) => { const tr = world.triggers.find((t) => t.def.id === id); openShop(tr.def, tr); [...document.querySelectorAll('#shopItems .item')].find((b) => b.textContent.includes(n)).click(); } };
   $('money').textContent = state.money;
+  // ☁️ Firebase — background mein; fail ho to game offline chalta hai
+  $('btnGoogle').onclick = () => googleLogin();
+  setCloudStatus('⏳ Cloud se jud rahe hain…');
+  cloud.start().then((ok) => {
+    if (!ok) { setCloudStatus('📴 Offline — progress sirf is browser mein'); return; }
+    cloud.onUser((u) => {
+      setCloudStatus();
+      if (u) cloudSync();
+      else cloud.loginGuest().catch(() => setCloudStatus('☁️ Google se login karo — progress kabhi nahi khoyega'));
+    });
+  });
   const btn = $('startBtn');
   btn.disabled = false;
   btn.textContent = 'Mohalla mein ghuso 🛺';

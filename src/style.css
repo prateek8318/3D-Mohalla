@@ -35,6 +35,10 @@ button { font-family: inherit; cursor: pointer; color: inherit; }
 .lang-pick { display: inline-flex; gap: 6px; padding: 5px; border-radius: 999px; background: rgba(255,255,255,.07); border: 1px solid var(--line); }
 .lang-pick button { border: 0; background: none; padding: 6px 18px; border-radius: 999px; font-size: 17px; font-weight: 700; }
 .lang-pick button.on { background: var(--pink); box-shadow: 0 0 18px var(--pink); }
+.cloud-row { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 12px 0 4px; }
+.gbtn { border: 1px solid var(--line); background: #fff; color: #1a1020; font-weight: 800; font-size: 15px; padding: 8px 18px; border-radius: 999px; cursor: pointer; }
+.gbtn.hidden { display: none; }
+.cloud-status { font-size: 13px; color: var(--muted); min-height: 1em; }
 .bak { display: block; margin: 14px 0 20px; color: var(--muted); font-size: 15px; }
 .bak input { accent-color: var(--pink); transform: scale(1.2); margin-right: 6px; }
 .big {
